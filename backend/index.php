@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/vendor/autoload.php';
 require_once __DIR__ . '/src/Routes/auth.php';
+require_once __DIR__ . '/src/Routes/slips.php';
 
 use Dotenv\Dotenv;
 
@@ -35,6 +36,9 @@ $uri = rtrim($uri, '/') ?: '/';
 if (str_starts_with($uri, '/api/auth')) {
     $subPath = substr($uri, strlen('/api/auth')) ?: '/';
     handleAuthRoutes($method, $subPath, $body);
+} elseif (str_starts_with($uri, '/api/slips')) {
+    $subPath = substr($uri, strlen('/api/slips')) ?: '/';
+    handleSlipRoutes($method, $subPath, $body);
 } else {
     routeNotFound();
 }
