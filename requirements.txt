@@ -1,0 +1,24 @@
+# SlipScan — Python Dependencies
+# Install: pip install -r requirements.txt
+
+# ── OCR Flask Microservice ─────────────────────────────────────────────────
+flask==3.1.3
+python-dotenv==1.2.1
+
+# ── Typhoon OCR Engine ─────────────────────────────────────────────────────
+typhoon-ocr==0.4.1
+openai==2.21.0          # typhoon-ocr dependency
+httpx==0.28.1
+pydantic==2.12.5
+
+# ── Image Preprocessing ────────────────────────────────────────────────────
+Pillow==12.1.1
+opencv-python-headless==4.13.0.92  # headless = ไม่ต้องมี GUI
+numpy==2.2.6
+
+# ── PDF Support ────────────────────────────────────────────────────────────
+pypdf==6.7.2
+
+# ── Utilities ─────────────────────────────────────────────────────────────
+requests==2.32.5
+tqdm==4.67.3
