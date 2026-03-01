@@ -1,14 +1,17 @@
 """
 backend_flask/routes/slips.py
-Endpoints: upload, upload-batch, get by id, list all
+Endpoints: upload, upload-batch, get by id, list/search, export CSV, dashboard stats
 """
 import os
+import io
+import csv
 import uuid
 import json
+import hashlib
 import requests
-from datetime import datetime
 from pathlib import Path
-from flask import Blueprint, request, jsonify, send_from_directory
+from datetime import datetime, timedelta
+from flask import Blueprint, request, jsonify, send_from_directory, Response
 from config import get_db
 from auth_guard import require_auth
 
@@ -42,20 +45,44 @@ def upload():
     if error:
         return jsonify({"success": False, "message": error}), 400
 
+    # Compute hash before saving
+    file_bytes = file.read()
+    file_hash  = hashlib.sha256(file_bytes).hexdigest()
+    file.seek(0)
+
+    # Duplicate check
+    is_dup, dup_slip_id = _check_duplicate(file_hash, user_id)
+
     filename = f"slip_{uuid.uuid4().hex}{Path(file.filename).suffix.lower()}"
     dest     = UPLOAD_DIR / filename
-    file.save(str(dest))
+    with open(str(dest), "wb") as f:
+        f.write(file_bytes)
 
     ocr_data, warnings = _call_ocr(str(dest))
     if ocr_data is None:
         warnings.append("OCR service unavailable or failed")
         ocr_data = {}
 
-    slip_id = _save_slip(user_id, f"uploads/{filename}", ocr_data)
+    if is_dup:
+        warnings.append(f"⚠️ สลิปซ้ำกับรายการ #{dup_slip_id}")
+
+    slip_id = _save_slip(user_id, f"uploads/{filename}", ocr_data, is_dup, file_hash)
+
+    # Notification: แจ้งเตือนถ้าสลิปปลอมหรืออ่านข้อมูลไม่ครบ
+    notifications = []
+    if ocr_data.get("is_fake"):
+        notifications.append({"type": "danger", "message": "⚠️ ตรวจพบสลิปปลอม!"})
+    missing = [f for f in ["amount", "bank_name", "slip_date"] if not ocr_data.get(f)]
+    if missing:
+        notifications.append({"type": "warning", "message": f"อ่านข้อมูลไม่ครบ: {', '.join(missing)}"})
+    if is_dup:
+        notifications.append({"type": "warning", "message": f"สลิปซ้ำกับรายการ #{dup_slip_id}"})
 
     return jsonify({
         "success":  True,
         "slip_id":  slip_id,
+        "is_duplicate": is_dup,
+        "duplicate_of": dup_slip_id,
         "data": {
             "sender_name":   ocr_data.get("sender_name"),
             "bank_name":     ocr_data.get("bank_name"),
@@ -65,9 +92,11 @@ def upload():
             "ref_no":        ocr_data.get("ref_no"),
             "receiver_name": ocr_data.get("receiver_name"),
             "receiver_acct": ocr_data.get("receiver_account"),
+            "is_fake":       ocr_data.get("is_fake", False),
         },
-        "raw_ocr":  ocr_data.get("raw_ocr"),
-        "warnings": warnings,
+        "raw_ocr":       ocr_data.get("raw_ocr"),
+        "warnings":      warnings,
+        "notifications": notifications,
     }), 200
 
 
@@ -95,21 +124,33 @@ def upload_batch():
             failed_count += 1
             continue
 
+        file_bytes = file.read()
+        file_hash  = hashlib.sha256(file_bytes).hexdigest()
+        file.seek(0)
+
+        is_dup, dup_slip_id = _check_duplicate(file_hash, user_id)
+
         filename = f"slip_{uuid.uuid4().hex}{Path(file.filename).suffix.lower()}"
         dest     = UPLOAD_DIR / filename
-        file.save(str(dest))
+        with open(str(dest), "wb") as f:
+            f.write(file_bytes)
 
         ocr_data, warnings = _call_ocr(str(dest))
         if ocr_data is None:
             warnings.append("OCR service unavailable")
             ocr_data = {}
 
-        slip_id = _save_slip(user_id, f"uploads/{filename}", ocr_data)
+        if is_dup:
+            warnings.append(f"⚠️ สลิปซ้ำกับรายการ #{dup_slip_id}")
+
+        slip_id = _save_slip(user_id, f"uploads/{filename}", ocr_data, is_dup, file_hash)
         results.append({
             "index":    i,
             "success":  True,
             "slip_id":  slip_id,
             "filename": file.filename,
+            "is_duplicate": is_dup,
+            "duplicate_of": dup_slip_id,
             "data": {
                 "sender_name":   ocr_data.get("sender_name"),
                 "bank_name":     ocr_data.get("bank_name"),
@@ -119,6 +160,7 @@ def upload_batch():
                 "ref_no":        ocr_data.get("ref_no"),
                 "receiver_name": ocr_data.get("receiver_name"),
                 "receiver_acct": ocr_data.get("receiver_account"),
+                "is_fake":       ocr_data.get("is_fake", False),
             },
             "warnings": warnings,
         })
@@ -154,8 +196,9 @@ def get_by_id(slip_id):
     return jsonify({"success": True, "data": slip}), 200
 
 
-# ── GET /api/slips ───────────────────────────────────────────────────────────
-@slips_bp.get("/")
+# ── GET /api/slips  — list + search/filter ───────────────────────────────────
+@slips_bp.get("/", strict_slashes=False)
+@slips_bp.get("/list", strict_slashes=False)
 @require_auth
 def list_all():
     user_id  = int(request.current_user["sub"])
@@ -163,24 +206,74 @@ def list_all():
     per_page = min(50, max(1, int(request.args.get("per_page", 20))))
     offset   = (page - 1) * per_page
 
+    # ── Search / Filter params ──
+    q          = request.args.get("q", "").strip()          # ค้นหา sender_name / receiver_name
+    bank       = request.args.get("bank", "").strip()       # กรองธนาคาร
+    ref_no     = request.args.get("ref_no", "").strip()     # กรอง Ref No.
+    date_from  = request.args.get("date_from", "").strip()  # YYYY-MM-DD
+    date_to    = request.args.get("date_to", "").strip()
+    min_amount = request.args.get("min_amount", "").strip()
+    max_amount = request.args.get("max_amount", "").strip()
+    is_fake    = request.args.get("is_fake", "").strip()    # "true" | "false"
+    is_dup     = request.args.get("is_duplicate", "").strip()
+
+    conditions = ["user_id = %s"]
+    params     = [user_id]
+
+    if q:
+        conditions.append("(sender_name ILIKE %s OR receiver_name ILIKE %s)")
+        params += [f"%{q}%", f"%{q}%"]
+    if bank:
+        conditions.append("bank_name ILIKE %s")
+        params.append(f"%{bank}%")
+    if ref_no:
+        conditions.append("ref_no ILIKE %s")
+        params.append(f"%{ref_no}%")
+    if date_from:
+        conditions.append("slip_date >= %s")
+        params.append(date_from)
+    if date_to:
+        conditions.append("slip_date <= %s")
+        params.append(date_to)
+    if min_amount:
+        conditions.append("amount >= %s")
+        params.append(float(min_amount))
+    if max_amount:
+        conditions.append("amount <= %s")
+        params.append(float(max_amount))
+    if is_fake in ("true", "false"):
+        conditions.append("is_fake = %s")
+        params.append(is_fake == "true")
+    if is_dup in ("true", "false"):
+        conditions.append("is_duplicate = %s")
+        params.append(is_dup == "true")
+
+    where = " AND ".join(conditions)
+
     conn = get_db()
     with conn.cursor() as cur:
-        cur.execute("SELECT COUNT(*) AS cnt FROM slips WHERE user_id = %s", (user_id,))
+        cur.execute(f"SELECT COUNT(*) AS cnt FROM slips WHERE {where}", params)
         total = cur.fetchone()["cnt"]
 
         cur.execute(
-            """SELECT id, image_path, sender_name, bank_name, amount, slip_date, slip_time,
+            f"""SELECT id, image_path, sender_name, bank_name, amount, slip_date, slip_time,
                       ref_no, receiver_name, receiver_acct, is_fake, is_duplicate, created_at
-               FROM slips WHERE user_id = %s
+               FROM slips WHERE {where}
                ORDER BY created_at DESC
                LIMIT %s OFFSET %s""",
-            (user_id, per_page, offset),
+            params + [per_page, offset],
         )
         slips = [dict(r) for r in cur.fetchall()]
 
     for s in slips:
         if s.get("created_at"):
             s["created_at"] = str(s["created_at"])
+        if s.get("slip_date"):
+            s["slip_date"] = str(s["slip_date"])
+        if s.get("slip_time"):
+            s["slip_time"] = str(s["slip_time"])
+        if s.get("amount") is not None:
+            s["amount"] = float(s["amount"])
 
     return jsonify({
         "success":  True,
@@ -188,6 +281,218 @@ def list_all():
         "page":     page,
         "per_page": per_page,
         "data":     slips,
+    }), 200
+
+
+# ── GET /api/slips/export  — Export CSV ─────────────────────────────────────
+@slips_bp.get("/export")
+@require_auth
+def export_csv():
+    user_id = int(request.current_user["sub"])
+
+    # Accept same filter params as list_all
+    q          = request.args.get("q", "").strip()
+    bank       = request.args.get("bank", "").strip()
+    ref_no     = request.args.get("ref_no", "").strip()
+    date_from  = request.args.get("date_from", "").strip()
+    date_to    = request.args.get("date_to", "").strip()
+    min_amount = request.args.get("min_amount", "").strip()
+    max_amount = request.args.get("max_amount", "").strip()
+    is_fake    = request.args.get("is_fake", "").strip()
+    is_dup     = request.args.get("is_duplicate", "").strip()
+    fmt        = request.args.get("format", "csv").lower()  # "csv" only (excel = csv w/ BOM)
+
+    conditions = ["user_id = %s"]
+    params     = [user_id]
+
+    if q:
+        conditions.append("(sender_name ILIKE %s OR receiver_name ILIKE %s)")
+        params += [f"%{q}%", f"%{q}%"]
+    if bank:
+        conditions.append("bank_name ILIKE %s")
+        params.append(f"%{bank}%")
+    if ref_no:
+        conditions.append("ref_no ILIKE %s")
+        params.append(f"%{ref_no}%")
+    if date_from:
+        conditions.append("slip_date >= %s")
+        params.append(date_from)
+    if date_to:
+        conditions.append("slip_date <= %s")
+        params.append(date_to)
+    if min_amount:
+        conditions.append("amount >= %s")
+        params.append(float(min_amount))
+    if max_amount:
+        conditions.append("amount <= %s")
+        params.append(float(max_amount))
+    if is_fake in ("true", "false"):
+        conditions.append("is_fake = %s")
+        params.append(is_fake == "true")
+    if is_dup in ("true", "false"):
+        conditions.append("is_duplicate = %s")
+        params.append(is_dup == "true")
+
+    where = " AND ".join(conditions)
+
+    conn = get_db()
+    with conn.cursor() as cur:
+        cur.execute(
+            f"""SELECT id, sender_name, bank_name, amount, slip_date, slip_time,
+                      ref_no, receiver_name, receiver_acct, is_fake, is_duplicate, created_at
+               FROM slips WHERE {where}
+               ORDER BY created_at DESC""",
+            params,
+        )
+        rows = cur.fetchall()
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow([
+        "ID", "ผู้โอน", "ธนาคาร", "จำนวนเงิน", "วันที่สลิป", "เวลา",
+        "Ref No.", "ผู้รับ", "บัญชีรับ", "สลิปปลอม", "สลิปซ้ำ", "วันที่อัพโหลด"
+    ])
+    for r in rows:
+        writer.writerow([
+            r["id"],
+            r["sender_name"] or "",
+            r["bank_name"] or "",
+            r["amount"] if r["amount"] is not None else "",
+            str(r["slip_date"]) if r["slip_date"] else "",
+            str(r["slip_time"]) if r["slip_time"] else "",
+            r["ref_no"] or "",
+            r["receiver_name"] or "",
+            r["receiver_acct"] or "",
+            "ใช่" if r["is_fake"] else "ไม่",
+            "ใช่" if r["is_duplicate"] else "ไม่",
+            str(r["created_at"]),
+        ])
+
+    # UTF-8 BOM for Excel compatibility
+    bom = "\ufeff"
+    csv_content = bom + output.getvalue()
+    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+    filename = f"slips_{ts}.csv"
+
+    return Response(
+        csv_content.encode("utf-8-sig"),
+        mimetype="text/csv; charset=utf-8-sig",
+        headers={"Content-Disposition": f"attachment; filename={filename}"},
+    )
+
+
+# ── GET /api/slips/dashboard  — Dashboard stats ─────────────────────────────
+@slips_bp.get("/dashboard")
+@require_auth
+def dashboard():
+    user_id = int(request.current_user["sub"])
+    conn    = get_db()
+
+    with conn.cursor() as cur:
+        # ── Summary totals ──
+        cur.execute(
+            """SELECT
+                COUNT(*)                           AS total_slips,
+                COALESCE(SUM(amount), 0)           AS total_amount,
+                COALESCE(AVG(amount), 0)           AS avg_amount,
+                COUNT(*) FILTER (WHERE is_fake)    AS fake_count,
+                COUNT(*) FILTER (WHERE is_duplicate) AS dup_count
+               FROM slips WHERE user_id = %s""",
+            (user_id,),
+        )
+        summary = dict(cur.fetchone())
+
+        # ── Bank ranking ──
+        cur.execute(
+            """SELECT bank_name,
+                      COUNT(*)              AS slip_count,
+                      COALESCE(SUM(amount), 0) AS total_amount
+               FROM slips
+               WHERE user_id = %s AND bank_name IS NOT NULL
+               GROUP BY bank_name
+               ORDER BY total_amount DESC
+               LIMIT 10""",
+            (user_id,),
+        )
+        bank_ranking = [dict(r) for r in cur.fetchall()]
+
+        # ── Daily trend (last 30 days) ──
+        cur.execute(
+            """SELECT slip_date::text AS date,
+                      COUNT(*)        AS slip_count,
+                      COALESCE(SUM(amount), 0) AS total_amount
+               FROM slips
+               WHERE user_id = %s
+                 AND slip_date >= CURRENT_DATE - INTERVAL '30 days'
+                 AND slip_date IS NOT NULL
+               GROUP BY slip_date
+               ORDER BY slip_date""",
+            (user_id,),
+        )
+        daily_trend = [dict(r) for r in cur.fetchall()]
+
+        # ── Weekly summary (last 8 weeks) ──
+        cur.execute(
+            """SELECT
+                DATE_TRUNC('week', created_at)::date::text AS week_start,
+                COUNT(*)                                   AS slip_count,
+                COALESCE(SUM(amount), 0)                   AS total_amount
+               FROM slips
+               WHERE user_id = %s
+                 AND created_at >= NOW() - INTERVAL '8 weeks'
+               GROUP BY DATE_TRUNC('week', created_at)
+               ORDER BY week_start""",
+            (user_id,),
+        )
+        weekly_summary = [dict(r) for r in cur.fetchall()]
+
+        # ── Monthly summary (last 12 months) ──
+        cur.execute(
+            """SELECT
+                TO_CHAR(DATE_TRUNC('month', created_at), 'YYYY-MM') AS month,
+                COUNT(*)                                             AS slip_count,
+                COALESCE(SUM(amount), 0)                            AS total_amount
+               FROM slips
+               WHERE user_id = %s
+                 AND created_at >= NOW() - INTERVAL '12 months'
+               GROUP BY DATE_TRUNC('month', created_at)
+               ORDER BY month""",
+            (user_id,),
+        )
+        monthly_summary = [dict(r) for r in cur.fetchall()]
+
+        # ── Recent slips (last 10) ──
+        cur.execute(
+            """SELECT id, sender_name, bank_name, amount, slip_date, ref_no,
+                      is_fake, is_duplicate, created_at
+               FROM slips WHERE user_id = %s
+               ORDER BY created_at DESC LIMIT 10""",
+            (user_id,),
+        )
+        recent = [dict(r) for r in cur.fetchall()]
+
+    # Serialise
+    for r in recent:
+        r["created_at"] = str(r["created_at"])
+        r["amount"] = float(r["amount"]) if r["amount"] is not None else None
+
+    for r in bank_ranking:
+        r["total_amount"] = float(r["total_amount"])
+
+    for r in daily_trend + weekly_summary + monthly_summary:
+        r["total_amount"] = float(r["total_amount"])
+
+    summary["total_amount"] = float(summary["total_amount"])
+    summary["avg_amount"]   = float(summary["avg_amount"])
+
+    return jsonify({
+        "success":         True,
+        "summary":         summary,
+        "bank_ranking":    bank_ranking,
+        "daily_trend":     daily_trend,
+        "weekly_summary":  weekly_summary,
+        "monthly_summary": monthly_summary,
+        "recent_slips":    recent,
     }), 200
 
 
@@ -226,59 +531,66 @@ def _call_ocr(file_path: str) -> tuple[dict | None, list[str]]:
         return None, warnings
 
 
-def _safe_date(val: str | None) -> str | None:
-    """Validate ISO date string — คืน None ถ้า OCR ส่งค่าผิดรูปแบบ"""
-    if not val:
-        return None
-    try:
-        datetime.strptime(str(val), "%Y-%m-%d")
-        return str(val)
-    except ValueError:
-        return None
-
-
-def _safe_time(val: str | None) -> str | None:
-    """Validate time string — รองรับ HH:MM:SS หรือ HH:MM"""
-    if not val:
-        return None
-    for fmt in ("%H:%M:%S", "%H:%M"):
-        try:
-            datetime.strptime(str(val), fmt)
-            return str(val)
-        except ValueError:
-            continue
-    return None
-
-
-def _save_slip(user_id: int, image_path: str, data: dict) -> int:
+def _check_duplicate(file_hash: str, user_id: int) -> tuple[bool, int | None]:
+    """Return (is_duplicate, original_slip_id)."""
     conn = get_db()
-    raw_ocr = json.dumps(data.get("raw_ocr"), ensure_ascii=False) if data.get("raw_ocr") else None
-
     try:
         with conn.cursor() as cur:
             cur.execute(
-                """INSERT INTO slips
-               (user_id, image_path, sender_name, bank_name, amount,
-                slip_date, slip_time, ref_no, receiver_name, receiver_acct, raw_ocr)
-               VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-               RETURNING id""",
-                (
-                    user_id,
-                    image_path,
-                    data.get("sender_name"),
-                    data.get("bank_name"),
-                    data.get("amount"),
-                    _safe_date(data.get("slip_date")),   # sanitize
-                    _safe_time(data.get("slip_time")),   # sanitize
-                    data.get("ref_no"),
-                    data.get("receiver_name"),
-                    data.get("receiver_account"),
-                    raw_ocr,
-                ),
+                """SELECT sh.slip_id FROM slip_hashes sh
+                   JOIN slips s ON s.id = sh.slip_id
+                   WHERE sh.hash = %s AND s.user_id = %s
+                   LIMIT 1""",
+                (file_hash, user_id),
             )
-            slip_id = cur.fetchone()["id"]
-            conn.commit()
-        return slip_id
+            row = cur.fetchone()
+            if row:
+                return True, row["slip_id"]
     except Exception:
-        conn.rollback()   # รีเซ็ต transaction ที่พังเสมอ
-        raise
+        pass
+    return False, None
+
+
+def _save_slip(user_id: int, image_path: str, data: dict,
+               is_duplicate: bool = False, file_hash: str | None = None) -> int:
+    conn    = get_db()
+    raw_ocr = json.dumps(data.get("raw_ocr"), ensure_ascii=False) if data.get("raw_ocr") else None
+
+    with conn.cursor() as cur:
+        cur.execute(
+            """INSERT INTO slips
+               (user_id, image_path, sender_name, bank_name, amount,
+                slip_date, slip_time, ref_no, receiver_name, receiver_acct,
+                raw_ocr, is_fake, is_duplicate)
+               VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+               RETURNING id""",
+            (
+                user_id,
+                image_path,
+                data.get("sender_name"),
+                data.get("bank_name"),
+                data.get("amount"),
+                data.get("slip_date") or None,
+                data.get("slip_time") or None,
+                data.get("ref_no"),
+                data.get("receiver_name"),
+                data.get("receiver_account"),
+                raw_ocr,
+                bool(data.get("is_fake", False)),
+                is_duplicate,
+            ),
+        )
+        slip_id = cur.fetchone()["id"]
+
+        # Save hash for future duplicate detection
+        if file_hash:
+            try:
+                cur.execute(
+                    "INSERT INTO slip_hashes (slip_id, hash) VALUES (%s, %s) ON CONFLICT (hash) DO NOTHING",
+                    (slip_id, file_hash),
+                )
+            except Exception:
+                pass  # hash conflict is safe to ignore
+
+        conn.commit()
+    return slip_id

@@ -15,6 +15,77 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
 
     <style>
+        /* ── Toast Notifications ── */
+        #toastContainer {
+            position: fixed;
+            top: 1rem;
+            right: 1rem;
+            z-index: 9999;
+            display: flex;
+            flex-direction: column;
+            gap: .5rem;
+        }
+
+        .toast-item {
+            display: flex;
+            align-items: center;
+            gap: .75rem;
+            padding: .8rem 1.25rem;
+            border-radius: .875rem;
+            backdrop-filter: blur(20px);
+            border: 1px solid;
+            min-width: 260px;
+            max-width: 380px;
+            animation: slideInToast .3s ease-out;
+            font-size: .88rem;
+            font-weight: 500;
+        }
+
+        @keyframes slideInToast {
+            from {
+                opacity: 0;
+                transform: translateX(40px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+
+        .toast-danger {
+            background: rgba(239, 68, 68, .18);
+            border-color: rgba(239, 68, 68, .5);
+            color: #fca5a5;
+        }
+
+        .toast-warning {
+            background: rgba(245, 158, 11, .18);
+            border-color: rgba(245, 158, 11, .5);
+            color: #fde68a;
+        }
+
+        .toast-success {
+            background: rgba(34, 197, 94, .18);
+            border-color: rgba(34, 197, 94, .5);
+            color: #86efac;
+        }
+
+        /* ── Fake/Dup badges ── */
+        .badge-fake {
+            background: rgba(239, 68, 68, .2);
+            color: #fca5a5;
+            border: 1px solid rgba(239, 68, 68, .4);
+        }
+
+        .badge-dup {
+            background: rgba(245, 158, 11, .2);
+            color: #fde68a;
+            border: 1px solid rgba(245, 158, 11, .4);
+        }
+    </style>
+
+    <style>
         :root {
             --primary: #4f46e5;
             --primary-dk: #3730a3;
@@ -352,10 +423,18 @@
 
 <body>
 
+    <!-- Toast Container -->
+    <div id="toastContainer"></div>
+
     <!-- Navbar -->
     <nav class="topbar">
         <div class="brand">Slip<span>Scan</span></div>
         <div class="d-flex align-items-center gap-2">
+            <a href="dashboard.html"
+                class="btn btn-link text-white-50 text-decoration-none d-flex align-items-center gap-1"
+                style="font-size:.85rem">
+                <i class="bi bi-grid-1x2"></i> Dashboard
+            </a>
             <div class="user-badge">
                 <i class="bi bi-person-circle"></i>
                 <span id="userEmail">กำลังโหลด...</span>
@@ -430,6 +509,17 @@
             localStorage.removeItem('slipscan_token');
             localStorage.removeItem('slipscan_user');
             window.location.href = 'login.html';
+        }
+
+        // ── Toast ───────────────────────────────────────────────────────────────
+        function showToast(type, message, duration = 5000) {
+            const icons = { danger: 'bi-x-octagon-fill', warning: 'bi-exclamation-triangle-fill', success: 'bi-check-circle-fill' };
+            const container = document.getElementById('toastContainer');
+            const el = document.createElement('div');
+            el.className = `toast-item toast-${type}`;
+            el.innerHTML = `<i class="bi ${icons[type] || 'bi-info-circle-fill'}"></i><span>${message}</span>`;
+            container.appendChild(el);
+            setTimeout(() => el.remove(), duration);
         }
 
         // ── Drop Zone ───────────────────────────────────────────────────────────
@@ -548,11 +638,24 @@
 
             const ok = results.filter(r => r.ok && r.data?.success).length;
             const fail = results.length - ok;
+            const fakeCount = results.filter(r => r.data?.data?.is_fake).length;
+            const dupCount = results.filter(r => r.data?.is_duplicate).length;
 
             badge.innerHTML = `
-            <span class="badge-status badge-ok">${ok} สำเร็จ</span>
-            ${fail ? `<span class="badge-status badge-fail">${fail} ล้มเหลว</span>` : ''}
-        `;
+                <span class="badge-status badge-ok">${ok} สำเร็จ</span>
+                ${fail ? `<span class="badge-status badge-fail">${fail} ล้มเหลว</span>` : ''}
+                ${fakeCount ? `<span class="badge-status badge-fake" style="border-radius:2rem;font-size:.75rem;padding:.25rem .65rem">⚠️ ${fakeCount} ปลอม</span>` : ''}
+                ${dupCount ? `<span class="badge-status badge-dup"  style="border-radius:2rem;font-size:.75rem;padding:.25rem .65rem">🔁 ${dupCount} ซ้ำ</span>` : ''}
+            `;
+
+            // Toast notifications
+            if (fakeCount > 0) showToast('danger', `⚠️ ตรวจพบสลิปปลอม ${fakeCount} รายการ!`);
+            if (dupCount > 0) showToast('warning', `🔁 พบสลิปซ้ำ ${dupCount} รายการ`);
+            if (ok > 0 && !fakeCount && !dupCount) showToast('success', `✅ วิเคราะห์ ${ok} รายการเรียบร้อย`);
+
+            // Check incomplete OCR
+            const incompleteCount = results.filter(r => r.data?.notifications?.some(n => n.type === 'warning')).length;
+            if (incompleteCount > 0) showToast('warning', `อ่านข้อมูลไม่ครบบางรายการ (${incompleteCount} รายการ)`);
 
             list.innerHTML = '';
 
@@ -560,15 +663,22 @@
                 const isOk = r.ok && r.data?.success;
                 const d = r.data?.data || {};
                 const warns = r.data?.warnings || [];
+                const isFake = d.is_fake;
+                const isDup = r.data?.is_duplicate;
+
+                const statusBadges = [
+                    isFake ? `<span class="badge-status" style="background:rgba(239,68,68,.2);color:#fca5a5;border:1px solid rgba(239,68,68,.4);border-radius:2rem;font-size:.7rem;padding:.2rem .55rem">ปลอม</span>` : '',
+                    isDup ? `<span class="badge-status" style="background:rgba(245,158,11,.2);color:#fde68a;border:1px solid rgba(245,158,11,.4);border-radius:2rem;font-size:.7rem;padding:.2rem .55rem">ซ้ำ</span>` : '',
+                ].filter(Boolean).join('');
 
                 const card = document.createElement('div');
                 card.className = 'result-card';
-
                 card.innerHTML = `
                 <div class="result-header" onclick="toggleResult(${i})">
                     <i class="bi ${isOk ? 'bi-check-circle-fill text-success' : 'bi-x-circle-fill text-danger'}"></i>
                     <span class="fname">${escHtml(r.file)}</span>
                     <span class="badge-status ${isOk ? 'badge-ok' : 'badge-fail'}">${isOk ? 'OK' : 'FAIL'}</span>
+                    ${statusBadges}
                     ${r.data?.slip_id ? `<span class="text-white-50" style="font-size:.78rem">#${r.data.slip_id}</span>` : ''}
                     <i class="bi bi-chevron-down ms-1 text-white-50" id="chev-${i}"></i>
                 </div>

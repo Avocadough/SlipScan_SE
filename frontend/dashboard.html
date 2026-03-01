@@ -1,0 +1,1165 @@
+<!DOCTYPE html>
+<html lang="th">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>SlipScan — Dashboard</title>
+    <meta name="description" content="SlipScan Dashboard - ภาพรวมข้อมูลสลิปโอนเงิน" />
+
+    <!-- Bootstrap 5 -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" />
+    <!-- Bootstrap Icons -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet" />
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap"
+        rel="stylesheet" />
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
+
+    <style>
+        :root {
+            --primary: #4f46e5;
+            --primary-light: #818cf8;
+            --success-c: #22c55e;
+            --danger-c: #ef4444;
+            --warning-c: #f59e0b;
+            --surface: rgba(255, 255, 255, 0.06);
+            --border: rgba(255, 255, 255, 0.12);
+            --text-muted: rgba(255, 255, 255, 0.5);
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            min-height: 100vh;
+            background: linear-gradient(135deg, #0f0c29 0%, #302b63 50%, #24243e 100%);
+            color: #fff;
+            padding: 0;
+            margin: 0;
+        }
+
+        /* ── Toast ── */
+        #toastContainer {
+            position: fixed;
+            top: 1rem;
+            right: 1rem;
+            z-index: 9999;
+            display: flex;
+            flex-direction: column;
+            gap: .5rem;
+        }
+
+        .toast-item {
+            display: flex;
+            align-items: center;
+            gap: .75rem;
+            padding: .8rem 1.25rem;
+            border-radius: .875rem;
+            backdrop-filter: blur(20px);
+            border: 1px solid;
+            min-width: 280px;
+            max-width: 380px;
+            animation: slideInRight .3s ease-out;
+            font-size: .88rem;
+            font-weight: 500;
+        }
+
+        .toast-danger {
+            background: rgba(239, 68, 68, .18);
+            border-color: rgba(239, 68, 68, .5);
+            color: #fca5a5;
+        }
+
+        .toast-warning {
+            background: rgba(245, 158, 11, .18);
+            border-color: rgba(245, 158, 11, .5);
+            color: #fde68a;
+        }
+
+        .toast-success {
+            background: rgba(34, 197, 94, .18);
+            border-color: rgba(34, 197, 94, .5);
+            color: #86efac;
+        }
+
+        .toast-info {
+            background: rgba(99, 102, 241, .18);
+            border-color: rgba(99, 102, 241, .5);
+            color: #c7d2fe;
+        }
+
+        @keyframes slideInRight {
+            from {
+                opacity: 0;
+                transform: translateX(40px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+
+        /* ── Layout ── */
+        .sidebar {
+            width: 240px;
+            min-height: 100vh;
+            background: rgba(255, 255, 255, .04);
+            border-right: 1px solid var(--border);
+            padding: 1.5rem 1rem;
+            position: fixed;
+            left: 0;
+            top: 0;
+            bottom: 0;
+            display: flex;
+            flex-direction: column;
+            gap: .25rem;
+            backdrop-filter: blur(16px);
+            z-index: 100;
+        }
+
+        .brand {
+            font-size: 1.4rem;
+            font-weight: 800;
+            padding: .5rem .75rem 1.25rem;
+            display: flex;
+            align-items: center;
+            gap: .5rem;
+        }
+
+        .brand span {
+            color: var(--primary-light);
+        }
+
+        .nav-item a {
+            display: flex;
+            align-items: center;
+            gap: .65rem;
+            padding: .65rem .875rem;
+            border-radius: .75rem;
+            color: var(--text-muted);
+            text-decoration: none;
+            font-size: .9rem;
+            font-weight: 500;
+            transition: background .15s, color .15s;
+        }
+
+        .nav-item a:hover {
+            background: rgba(255, 255, 255, .08);
+            color: #fff;
+        }
+
+        .nav-item a.active {
+            background: rgba(99, 102, 241, .25);
+            color: var(--primary-light);
+        }
+
+        .nav-item a i {
+            font-size: 1rem;
+        }
+
+        .sidebar-footer {
+            margin-top: auto;
+            padding-top: 1rem;
+            border-top: 1px solid var(--border);
+        }
+
+        .sidebar-footer .user-info {
+            font-size: .82rem;
+            color: var(--text-muted);
+            padding: .5rem .875rem;
+        }
+
+        .main-content {
+            margin-left: 240px;
+            padding: 2rem;
+            min-height: 100vh;
+        }
+
+        /* ── Header ── */
+        .page-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 1.75rem;
+            flex-wrap: wrap;
+            gap: 1rem;
+        }
+
+        .page-title {
+            font-size: 1.6rem;
+            font-weight: 800;
+            margin: 0;
+        }
+
+        .header-actions {
+            display: flex;
+            gap: .75rem;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        /* ── Card ── */
+        .glass-card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 1.25rem;
+            padding: 1.5rem;
+            backdrop-filter: blur(20px);
+            animation: fadeUp .4s ease-out;
+        }
+
+        @keyframes fadeUp {
+            from {
+                opacity: 0;
+                transform: translateY(12px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        /* ── Stat Cards ── */
+        .stat-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .stat-card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 1.25rem;
+            padding: 1.25rem 1.5rem;
+            backdrop-filter: blur(20px);
+            animation: fadeUp .4s ease-out;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .stat-card::before {
+            content: '';
+            position: absolute;
+            top: -30px;
+            right: -30px;
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            opacity: .12;
+        }
+
+        .stat-card.blue::before {
+            background: #818cf8;
+        }
+
+        .stat-card.green::before {
+            background: #22c55e;
+        }
+
+        .stat-card.red::before {
+            background: #ef4444;
+        }
+
+        .stat-card.yellow::before {
+            background: #f59e0b;
+        }
+
+        .stat-icon {
+            width: 42px;
+            height: 42px;
+            border-radius: .75rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.2rem;
+            margin-bottom: .75rem;
+        }
+
+        .stat-icon.blue {
+            background: rgba(129, 140, 248, .2);
+            color: #818cf8;
+        }
+
+        .stat-icon.green {
+            background: rgba(34, 197, 94, .2);
+            color: #86efac;
+        }
+
+        .stat-icon.red {
+            background: rgba(239, 68, 68, .2);
+            color: #fca5a5;
+        }
+
+        .stat-icon.yellow {
+            background: rgba(245, 158, 11, .2);
+            color: #fde68a;
+        }
+
+        .stat-label {
+            font-size: .8rem;
+            color: var(--text-muted);
+            margin-bottom: .2rem;
+        }
+
+        .stat-value {
+            font-size: 1.6rem;
+            font-weight: 800;
+            line-height: 1;
+        }
+
+        .stat-sub {
+            font-size: .78rem;
+            color: var(--text-muted);
+            margin-top: .2rem;
+        }
+
+        /* ── Section title ── */
+        .section-title {
+            font-size: 1rem;
+            font-weight: 700;
+            margin-bottom: 1rem;
+            display: flex;
+            align-items: center;
+            gap: .5rem;
+        }
+
+        /* ── Chart wrapper ── */
+        .chart-wrap {
+            position: relative;
+            height: 240px;
+        }
+
+        /* ── Bank ranking ── */
+        .bank-row {
+            display: flex;
+            align-items: center;
+            gap: .75rem;
+            padding: .65rem 0;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .bank-row:last-child {
+            border-bottom: none;
+        }
+
+        .bank-rank {
+            width: 26px;
+            height: 26px;
+            border-radius: 50%;
+            background: rgba(129, 140, 248, .15);
+            color: var(--primary-light);
+            font-size: .78rem;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+        }
+
+        .bank-rank.gold {
+            background: rgba(234, 179, 8, .2);
+            color: #fde68a;
+        }
+
+        .bank-rank.silver {
+            background: rgba(148, 163, 184, .2);
+            color: #cbd5e1;
+        }
+
+        .bank-rank.bronze {
+            background: rgba(180, 83, 9, .2);
+            color: #fdba74;
+        }
+
+        .bank-name {
+            flex: 1;
+            font-size: .9rem;
+            font-weight: 500;
+        }
+
+        .bank-amount {
+            font-size: .9rem;
+            font-weight: 700;
+            color: var(--primary-light);
+        }
+
+        .bank-count {
+            font-size: .78rem;
+            color: var(--text-muted);
+        }
+
+        .bank-bar-track {
+            background: rgba(255, 255, 255, .08);
+            border-radius: 1rem;
+            height: 4px;
+            margin-top: .3rem;
+            overflow: hidden;
+        }
+
+        .bank-bar-fill {
+            height: 100%;
+            border-radius: 1rem;
+            background: linear-gradient(90deg, var(--primary), var(--primary-light));
+        }
+
+        /* ── Search bar ── */
+        .search-bar {
+            background: rgba(255, 255, 255, .07);
+            border: 1px solid var(--border);
+            border-radius: .875rem;
+            color: #fff;
+            padding: .6rem 1rem;
+            font-size: .9rem;
+            outline: none;
+            transition: border-color .2s;
+        }
+
+        .search-bar::placeholder {
+            color: var(--text-muted);
+        }
+
+        .search-bar:focus {
+            border-color: var(--primary);
+        }
+
+        select.search-bar option {
+            background: #302b63;
+            color: #fff;
+        }
+
+        /* ── Table ── */
+        .slips-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: .85rem;
+        }
+
+        .slips-table th {
+            color: var(--text-muted);
+            font-weight: 600;
+            font-size: .78rem;
+            text-transform: uppercase;
+            letter-spacing: .04em;
+            padding: .65rem .75rem;
+            text-align: left;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .slips-table td {
+            padding: .65rem .75rem;
+            border-bottom: 1px solid rgba(255, 255, 255, .05);
+            vertical-align: middle;
+        }
+
+        .slips-table tr:hover td {
+            background: rgba(255, 255, 255, .03);
+        }
+
+        .badge-fake {
+            background: rgba(239, 68, 68, .2);
+            color: #fca5a5;
+            border: 1px solid rgba(239, 68, 68, .4);
+        }
+
+        .badge-dup {
+            background: rgba(245, 158, 11, .2);
+            color: #fde68a;
+            border: 1px solid rgba(245, 158, 11, .4);
+        }
+
+        .badge-ok {
+            background: rgba(34, 197, 94, .2);
+            color: #86efac;
+            border: 1px solid rgba(34, 197, 94, .4);
+        }
+
+        .badge-pill {
+            font-size: .7rem;
+            padding: .15rem .55rem;
+            border-radius: 2rem;
+            font-weight: 600;
+            display: inline-block;
+        }
+
+        /* ── Buttons ── */
+        .btn-primary-custom {
+            background: linear-gradient(135deg, var(--primary), var(--primary-light));
+            border: none;
+            color: #fff;
+            border-radius: .75rem;
+            padding: .55rem 1.25rem;
+            font-size: .88rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform .15s, box-shadow .15s;
+            box-shadow: 0 4px 14px rgba(79, 70, 229, .35);
+            display: inline-flex;
+            align-items: center;
+            gap: .4rem;
+        }
+
+        .btn-primary-custom:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(79, 70, 229, .5);
+        }
+
+        .btn-outline-custom {
+            background: transparent;
+            border: 1px solid var(--border);
+            color: rgba(255, 255, 255, .8);
+            border-radius: .75rem;
+            padding: .55rem 1.25rem;
+            font-size: .88rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background .15s;
+            display: inline-flex;
+            align-items: center;
+            gap: .4rem;
+        }
+
+        .btn-outline-custom:hover {
+            background: rgba(255, 255, 255, .08);
+        }
+
+        /* ── Pagination ── */
+        .pagination-wrap {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-top: 1rem;
+            font-size: .83rem;
+            color: var(--text-muted);
+            flex-wrap: wrap;
+            gap: .5rem;
+        }
+
+        .pag-btn {
+            background: rgba(255, 255, 255, .07);
+            border: 1px solid var(--border);
+            color: #fff;
+            border-radius: .5rem;
+            padding: .3rem .75rem;
+            font-size: .82rem;
+            cursor: pointer;
+            transition: background .15s;
+        }
+
+        .pag-btn:hover:not(:disabled) {
+            background: rgba(255, 255, 255, .15);
+        }
+
+        .pag-btn:disabled {
+            opacity: .4;
+            cursor: not-allowed;
+        }
+
+        /* ── Filter row ── */
+        .filter-row {
+            display: flex;
+            gap: .75rem;
+            flex-wrap: wrap;
+            margin-bottom: 1rem;
+            align-items: flex-end;
+        }
+
+        .filter-group label {
+            display: block;
+            font-size: .75rem;
+            color: var(--text-muted);
+            margin-bottom: .25rem;
+        }
+
+        /* ── Responsive ── */
+        @media (max-width: 768px) {
+            .sidebar {
+                display: none;
+            }
+
+            .main-content {
+                margin-left: 0;
+                padding: 1rem;
+            }
+
+            .stat-grid {
+                grid-template-columns: 1fr 1fr;
+            }
+        }
+
+        /* ── Loading spinner ── */
+        .spinner-wrap {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 2rem;
+            color: var(--text-muted);
+            gap: .75rem;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 2rem;
+            color: var(--text-muted);
+        }
+    </style>
+</head>
+
+<body>
+
+    <!-- Toast Container -->
+    <div id="toastContainer"></div>
+
+    <!-- Sidebar -->
+    <nav class="sidebar">
+        <div class="brand">
+            <i class="bi bi-receipt-cutoff" style="color:var(--primary-light)"></i>
+            Slip<span>Scan</span>
+        </div>
+
+        <ul class="list-unstyled mb-0">
+            <li class="nav-item">
+                <a href="upload.html"><i class="bi bi-cloud-upload"></i> อัพโหลดสลิป</a>
+            </li>
+            <li class="nav-item">
+                <a href="dashboard.html" class="active"><i class="bi bi-grid-1x2"></i> Dashboard</a>
+            </li>
+            <li class="nav-item">
+                <a href="#slipsSection" onclick="scrollToSlips()"><i class="bi bi-list-ul"></i> รายการสลิป</a>
+            </li>
+        </ul>
+
+        <div class="sidebar-footer">
+            <div class="user-info">
+                <i class="bi bi-person-circle me-1"></i>
+                <span id="sidebarEmail">กำลังโหลด...</span>
+            </div>
+            <ul class="list-unstyled mb-0 mt-1">
+                <li class="nav-item">
+                    <a href="#" onclick="logout()"><i class="bi bi-box-arrow-right"></i> ออกจากระบบ</a>
+                </li>
+            </ul>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <main class="main-content">
+
+        <!-- Header -->
+        <div class="page-header">
+            <h1 class="page-title">
+                <i class="bi bi-grid-1x2-fill me-2" style="color:var(--primary-light)"></i>
+                Dashboard
+            </h1>
+            <div class="header-actions">
+                <button class="btn-primary-custom" onclick="exportCSV()">
+                    <i class="bi bi-download"></i> Export CSV
+                </button>
+                <button class="btn-outline-custom" onclick="loadDashboard()">
+                    <i class="bi bi-arrow-clockwise"></i> รีเฟรช
+                </button>
+            </div>
+        </div>
+
+        <!-- Stat Cards -->
+        <div class="stat-grid" id="statGrid">
+            <div class="stat-card blue">
+                <div class="stat-icon blue"><i class="bi bi-receipt-cutoff"></i></div>
+                <div class="stat-label">สลิปทั้งหมด</div>
+                <div class="stat-value" id="statTotal">—</div>
+                <div class="stat-sub">รายการ</div>
+            </div>
+            <div class="stat-card green">
+                <div class="stat-icon green"><i class="bi bi-cash-coin"></i></div>
+                <div class="stat-label">ยอดรวมทั้งหมด</div>
+                <div class="stat-value" id="statAmount">—</div>
+                <div class="stat-sub">บาท</div>
+            </div>
+            <div class="stat-card yellow">
+                <div class="stat-icon yellow"><i class="bi bi-calculator"></i></div>
+                <div class="stat-label">ยอดเฉลี่ยต่อสลิป</div>
+                <div class="stat-value" id="statAvg">—</div>
+                <div class="stat-sub">บาท</div>
+            </div>
+            <div class="stat-card red">
+                <div class="stat-icon red"><i class="bi bi-shield-exclamation"></i></div>
+                <div class="stat-label">สลิปปลอม / ซ้ำ</div>
+                <div class="stat-value" id="statFake">—</div>
+                <div class="stat-sub">รายการที่น่าสงสัย</div>
+            </div>
+        </div>
+
+        <!-- Charts Row -->
+        <div class="row g-3 mb-3">
+            <!-- Trend Chart -->
+            <div class="col-lg-8">
+                <div class="glass-card h-100">
+                    <div class="d-flex align-items-center justify-content-between mb-3">
+                        <div class="section-title mb-0">
+                            <i class="bi bi-graph-up-arrow" style="color:var(--primary-light)"></i>
+                            แนวโน้มยอดสลิป
+                        </div>
+                        <div class="d-flex gap-2">
+                            <button class="pag-btn active" id="btnDaily" onclick="switchChart('daily')">รายวัน</button>
+                            <button class="pag-btn" id="btnWeekly" onclick="switchChart('weekly')">รายสัปดาห์</button>
+                            <button class="pag-btn" id="btnMonthly" onclick="switchChart('monthly')">รายเดือน</button>
+                        </div>
+                    </div>
+                    <div class="chart-wrap">
+                        <canvas id="trendChart"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Bank Ranking -->
+            <div class="col-lg-4">
+                <div class="glass-card h-100">
+                    <div class="section-title">
+                        <i class="bi bi-bank" style="color:var(--primary-light)"></i>
+                        Ranking ธนาคาร
+                    </div>
+                    <div id="bankRanking">
+                        <div class="spinner-wrap">
+                            <div class="spinner-border spinner-border-sm"></div> กำลังโหลด...
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Slips List Section -->
+        <div class="glass-card" id="slipsSection">
+            <div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
+                <div class="section-title mb-0">
+                    <i class="bi bi-list-check" style="color:var(--primary-light)"></i>
+                    รายการสลิปทั้งหมด
+                </div>
+                <button class="btn-outline-custom" onclick="exportCSV()">
+                    <i class="bi bi-file-earmark-spreadsheet"></i> Export CSV
+                </button>
+            </div>
+
+            <!-- Search / Filter Row -->
+            <div class="filter-row" id="filterRow">
+                <div class="filter-group" style="flex:2;min-width:180px">
+                    <label>ค้นหา (ชื่อผู้โอน / ผู้รับ)</label>
+                    <input type="text" id="fQ" class="search-bar w-100" placeholder="ค้นหา..."
+                        oninput="debounceSearch()" />
+                </div>
+                <div class="filter-group" style="min-width:130px">
+                    <label>ธนาคาร</label>
+                    <input type="text" id="fBank" class="search-bar w-100" placeholder="เช่น กสิกร"
+                        oninput="debounceSearch()" />
+                </div>
+                <div class="filter-group" style="min-width:130px">
+                    <label>Ref No.</label>
+                    <input type="text" id="fRef" class="search-bar w-100" placeholder="Ref No."
+                        oninput="debounceSearch()" />
+                </div>
+                <div class="filter-group" style="min-width:130px">
+                    <label>จาก (วันที่สลิป)</label>
+                    <input type="date" id="fDateFrom" class="search-bar w-100" onchange="loadSlips(1)" />
+                </div>
+                <div class="filter-group" style="min-width:130px">
+                    <label>ถึง</label>
+                    <input type="date" id="fDateTo" class="search-bar w-100" onchange="loadSlips(1)" />
+                </div>
+                <div class="filter-group" style="min-width:110px">
+                    <label>ยอดเงิน ≥</label>
+                    <input type="number" id="fMinAmt" class="search-bar w-100" placeholder="0"
+                        oninput="debounceSearch()" />
+                </div>
+                <div class="filter-group" style="min-width:110px">
+                    <label>ยอดเงิน ≤</label>
+                    <input type="number" id="fMaxAmt" class="search-bar w-100" placeholder="ไม่จำกัด"
+                        oninput="debounceSearch()" />
+                </div>
+                <div class="filter-group" style="min-width:120px">
+                    <label>สถานะ</label>
+                    <select id="fFake" class="search-bar w-100" onchange="loadSlips(1)">
+                        <option value="">ทั้งหมด</option>
+                        <option value="false">ปกติ</option>
+                        <option value="true">สลิปปลอม</option>
+                    </select>
+                </div>
+                <div class="filter-group" style="min-width:110px">
+                    <label>ซ้ำ</label>
+                    <select id="fDup" class="search-bar w-100" onchange="loadSlips(1)">
+                        <option value="">ทั้งหมด</option>
+                        <option value="false">ไม่ซ้ำ</option>
+                        <option value="true">ซ้ำ</option>
+                    </select>
+                </div>
+                <div class="filter-group">
+                    <label>&nbsp;</label>
+                    <button class="btn-outline-custom" onclick="clearFilters()">
+                        <i class="bi bi-x-circle"></i> ล้าง
+                    </button>
+                </div>
+            </div>
+
+            <!-- Table -->
+            <div style="overflow-x:auto">
+                <table class="slips-table">
+                    <thead>
+                        <tr>
+                            <th>#ID</th>
+                            <th>ผู้โอน</th>
+                            <th>ธนาคาร</th>
+                            <th>จำนวนเงิน</th>
+                            <th>วันที่สลิป</th>
+                            <th>Ref No.</th>
+                            <th>สถานะ</th>
+                            <th>วันที่อัพโหลด</th>
+                        </tr>
+                    </thead>
+                    <tbody id="slipsBody">
+                        <tr>
+                            <td colspan="8">
+                                <div class="spinner-wrap">
+                                    <div class="spinner-border spinner-border-sm"></div> กำลังโหลด...
+                                </div>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Pagination -->
+            <div class="pagination-wrap">
+                <span id="paginationInfo">—</span>
+                <div class="d-flex gap-2 align-items-center">
+                    <button class="pag-btn" id="btnPrev" onclick="loadSlips(currentPage - 1)" disabled>
+                        <i class="bi bi-chevron-left"></i> ก่อนหน้า
+                    </button>
+                    <span id="pageLabel" style="font-size:.82rem;color:var(--text-muted)">หน้า 1</span>
+                    <button class="pag-btn" id="btnNext" onclick="loadSlips(currentPage + 1)" disabled>
+                        ถัดไป <i class="bi bi-chevron-right"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+    </main>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        const API_BASE = 'http://localhost:8000';
+        const token = localStorage.getItem('slipscan_token');
+        const user = JSON.parse(localStorage.getItem('slipscan_user') || '{}');
+
+        if (!token) { window.location.href = 'login.html'; }
+        document.getElementById('sidebarEmail').textContent = user.email || 'ผู้ใช้';
+
+        function getToken() { return localStorage.getItem('slipscan_token'); }
+
+        function logout() {
+            localStorage.removeItem('slipscan_token');
+            localStorage.removeItem('slipscan_user');
+            window.location.href = 'login.html';
+        }
+
+        function scrollToSlips() {
+            document.getElementById('slipsSection').scrollIntoView({ behavior: 'smooth' });
+        }
+
+        // ── Toast ───────────────────────────────────────────────────────────────
+        function showToast(type, message, duration = 4000) {
+            const icons = {
+                danger: 'bi-x-octagon-fill', warning: 'bi-exclamation-triangle-fill',
+                success: 'bi-check-circle-fill', info: 'bi-info-circle-fill'
+            };
+            const container = document.getElementById('toastContainer');
+            const el = document.createElement('div');
+            el.className = `toast-item toast-${type}`;
+            el.innerHTML = `<i class="bi ${icons[type] || icons.info}"></i><span>${message}</span>`;
+            container.appendChild(el);
+            setTimeout(() => el.remove(), duration);
+        }
+
+        // ── Dashboard ───────────────────────────────────────────────────────────
+        let dashData = null;
+        let trendChart = null;
+        let currentChartMode = 'daily';
+
+        async function loadDashboard() {
+            try {
+                const res = await fetch(`${API_BASE}/api/slips/dashboard`, {
+                    headers: { Authorization: `Bearer ${getToken()}` }
+                });
+                const data = await res.json();
+                if (!data.success) throw new Error(data.message);
+                dashData = data;
+                renderStats(data.summary);
+                renderBankRanking(data.bank_ranking);
+                renderTrendChart(currentChartMode);
+
+                // Notifications
+                if (data.summary.fake_count > 0) {
+                    showToast('danger', `⚠️ พบสลิปปลอม ${data.summary.fake_count} รายการ!`);
+                }
+                if (data.summary.dup_count > 0) {
+                    showToast('warning', `สลิปซ้ำ ${data.summary.dup_count} รายการ`);
+                }
+            } catch (e) {
+                showToast('warning', 'ไม่สามารถโหลด Dashboard ได้: ' + e.message);
+            }
+        }
+
+        function renderStats(s) {
+            document.getElementById('statTotal').textContent = s.total_slips.toLocaleString('th-TH');
+            document.getElementById('statAmount').textContent = formatMoney(s.total_amount);
+            document.getElementById('statAvg').textContent = formatMoney(s.avg_amount);
+            document.getElementById('statFake').textContent = (s.fake_count + s.dup_count).toLocaleString('th-TH');
+        }
+
+        function renderBankRanking(banks) {
+            const container = document.getElementById('bankRanking');
+            if (!banks.length) {
+                container.innerHTML = '<div class="empty-state"><i class="bi bi-bank fs-2 d-block mb-2"></i>ยังไม่มีข้อมูล</div>';
+                return;
+            }
+            const maxAmt = banks[0]?.total_amount || 1;
+            const rankClasses = ['gold', 'silver', 'bronze'];
+
+            container.innerHTML = banks.map((b, i) => `
+                <div class="bank-row">
+                    <div class="bank-rank ${rankClasses[i] || ''}">${i + 1}</div>
+                    <div style="flex:1">
+                        <div class="d-flex justify-content-between">
+                            <span class="bank-name">${escHtml(b.bank_name)}</span>
+                            <div class="text-end">
+                                <div class="bank-amount">${formatMoney(b.total_amount)}</div>
+                                <div class="bank-count">${b.slip_count} สลิป</div>
+                            </div>
+                        </div>
+                        <div class="bank-bar-track mt-1">
+                            <div class="bank-bar-fill" style="width:${Math.round((b.total_amount / maxAmt) * 100)}%"></div>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function switchChart(mode) {
+            currentChartMode = mode;
+            ['Daily', 'Weekly', 'Monthly'].forEach(m => {
+                const btn = document.getElementById(`btn${m}`);
+                btn.classList.toggle('active', mode === m.toLowerCase());
+            });
+            renderTrendChart(mode);
+        }
+
+        function renderTrendChart(mode) {
+            if (!dashData) return;
+            const dataMap = { daily: dashData.daily_trend, weekly: dashData.weekly_summary, monthly: dashData.monthly_summary };
+            const rows = dataMap[mode] || [];
+
+            const labels = rows.map(r => r.date || r.week_start || r.month);
+            const amounts = rows.map(r => r.total_amount);
+            const counts = rows.map(r => r.slip_count);
+
+            const ctx = document.getElementById('trendChart').getContext('2d');
+            if (trendChart) trendChart.destroy();
+
+            trendChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels,
+                    datasets: [
+                        {
+                            label: 'ยอดเงิน (บาท)',
+                            data: amounts,
+                            backgroundColor: 'rgba(99,102,241,.5)',
+                            borderColor: 'rgba(129,140,248,1)',
+                            borderWidth: 2,
+                            borderRadius: 6,
+                            yAxisID: 'y',
+                        },
+                        {
+                            label: 'จำนวนสลิป',
+                            data: counts,
+                            type: 'line',
+                            borderColor: '#22c55e',
+                            backgroundColor: 'rgba(34,197,94,.15)',
+                            borderWidth: 2,
+                            pointRadius: 4,
+                            fill: true,
+                            tension: 0.4,
+                            yAxisID: 'y1',
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { labels: { color: 'rgba(255,255,255,.7)', font: { family: 'Inter', size: 12 } } },
+                        tooltip: {
+                            callbacks: {
+                                label: ctx => ctx.dataset.yAxisID === 'y'
+                                    ? `${ctx.dataset.label}: ${formatMoney(ctx.raw)} บาท`
+                                    : `${ctx.dataset.label}: ${ctx.raw} สลิป`
+                            }
+                        }
+                    },
+                    scales: {
+                        x: { ticks: { color: 'rgba(255,255,255,.5)', font: { size: 11 } }, grid: { color: 'rgba(255,255,255,.05)' } },
+                        y: { position: 'left', ticks: { color: 'rgba(255,255,255,.5)', font: { size: 11 } }, grid: { color: 'rgba(255,255,255,.05)' } },
+                        y1: { position: 'right', ticks: { color: '#86efac', font: { size: 11 } }, grid: { display: false } }
+                    }
+                }
+            });
+        }
+
+        // ── Slips List ──────────────────────────────────────────────────────────
+        let currentPage = 1;
+        let totalPages = 1;
+        let searchTimer = null;
+
+        function debounceSearch() {
+            clearTimeout(searchTimer);
+            searchTimer = setTimeout(() => loadSlips(1), 500);
+        }
+
+        function buildFilterParams() {
+            const p = new URLSearchParams();
+            const q = document.getElementById('fQ').value.trim();
+            const bank = document.getElementById('fBank').value.trim();
+            const ref = document.getElementById('fRef').value.trim();
+            const df = document.getElementById('fDateFrom').value;
+            const dt = document.getElementById('fDateTo').value;
+            const mn = document.getElementById('fMinAmt').value;
+            const mx = document.getElementById('fMaxAmt').value;
+            const fk = document.getElementById('fFake').value;
+            const dp = document.getElementById('fDup').value;
+
+            if (q) p.set('q', q);
+            if (bank) p.set('bank', bank);
+            if (ref) p.set('ref_no', ref);
+            if (df) p.set('date_from', df);
+            if (dt) p.set('date_to', dt);
+            if (mn) p.set('min_amount', mn);
+            if (mx) p.set('max_amount', mx);
+            if (fk) p.set('is_fake', fk);
+            if (dp) p.set('is_duplicate', dp);
+            return p;
+        }
+
+        async function loadSlips(page = 1) {
+            currentPage = page;
+            const tbody = document.getElementById('slipsBody');
+            tbody.innerHTML = `<tr><td colspan="8"><div class="spinner-wrap"><div class="spinner-border spinner-border-sm"></div> กำลังโหลด...</div></td></tr>`;
+
+            const params = buildFilterParams();
+            params.set('page', page);
+            params.set('per_page', 20);
+
+            try {
+                const res = await fetch(`${API_BASE}/api/slips/list?${params.toString()}`, {
+                    headers: { Authorization: `Bearer ${getToken()}` }
+                });
+                const data = await res.json();
+                if (!data.success) throw new Error(data.message);
+
+                totalPages = Math.ceil(data.total / data.per_page) || 1;
+                renderSlipsTable(data.data);
+                updatePagination(data.total, data.page, data.per_page);
+            } catch (e) {
+                tbody.innerHTML = `<tr><td colspan="8"><div class="empty-state text-danger"><i class="bi bi-exclamation-triangle fs-2 d-block mb-2"></i>${escHtml(e.message)}</div></td></tr>`;
+            }
+        }
+
+        function renderSlipsTable(slips) {
+            const tbody = document.getElementById('slipsBody');
+            if (!slips.length) {
+                tbody.innerHTML = `<tr><td colspan="8"><div class="empty-state"><i class="bi bi-inbox fs-2 d-block mb-2"></i>ไม่พบรายการสลิป</div></td></tr>`;
+                return;
+            }
+            tbody.innerHTML = slips.map(s => {
+                const isFake = s.is_fake;
+                const isDup = s.is_duplicate;
+                const status = isFake
+                    ? `<span class="badge-pill badge-fake">ปลอม</span>`
+                    : isDup
+                        ? `<span class="badge-pill badge-dup">ซ้ำ</span>`
+                        : `<span class="badge-pill badge-ok">ปกติ</span>`;
+                const date = s.created_at ? s.created_at.substring(0, 16).replace('T', ' ') : '—';
+                return `<tr>
+                    <td class="text-white-50">#${s.id}</td>
+                    <td>${escHtml(s.sender_name || '—')}</td>
+                    <td>${escHtml(s.bank_name || '—')}</td>
+                    <td>${s.amount != null ? formatMoney(s.amount) + ' ฿' : '—'}</td>
+                    <td>${s.slip_date || '—'}</td>
+                    <td style="font-family:monospace;font-size:.8rem">${escHtml(s.ref_no || '—')}</td>
+                    <td>${status}</td>
+                    <td style="font-size:.8rem;color:var(--text-muted)">${date}</td>
+                </tr>`;
+            }).join('');
+        }
+
+        function updatePagination(total, page, perPage) {
+            const start = (page - 1) * perPage + 1;
+            const end = Math.min(page * perPage, total);
+            document.getElementById('paginationInfo').textContent = `แสดง ${start}–${end} จาก ${total.toLocaleString('th-TH')} รายการ`;
+            document.getElementById('pageLabel').textContent = `หน้า ${page} / ${totalPages}`;
+            document.getElementById('btnPrev').disabled = page <= 1;
+            document.getElementById('btnNext').disabled = page >= totalPages;
+        }
+
+        function clearFilters() {
+            ['fQ', 'fBank', 'fRef', 'fDateFrom', 'fDateTo', 'fMinAmt', 'fMaxAmt'].forEach(id => {
+                document.getElementById(id).value = '';
+            });
+            document.getElementById('fFake').value = '';
+            document.getElementById('fDup').value = '';
+            loadSlips(1);
+        }
+
+        // ── Export ──────────────────────────────────────────────────────────────
+        function exportCSV() {
+            const params = buildFilterParams();
+            const url = `${API_BASE}/api/slips/export?${params.toString()}`;
+
+            // Fetch with auth header then download
+            fetch(url, { headers: { Authorization: `Bearer ${getToken()}` } })
+                .then(res => {
+                    if (!res.ok) throw new Error('Export failed');
+                    const cd = res.headers.get('Content-Disposition') || '';
+                    const fnMatch = cd.match(/filename=([^;]+)/);
+                    const filename = fnMatch ? fnMatch[1] : 'slips.csv';
+                    return res.blob().then(blob => ({ blob, filename }));
+                })
+                .then(({ blob, filename }) => {
+                    const a = document.createElement('a');
+                    a.href = URL.createObjectURL(blob);
+                    a.download = filename;
+                    a.click();
+                    showToast('success', 'ดาวน์โหลด CSV เรียบร้อยแล้ว');
+                })
+                .catch(e => showToast('danger', 'Export ล้มเหลว: ' + e.message));
+        }
+
+        // ── Helpers ─────────────────────────────────────────────────────────────
+        function formatMoney(n) {
+            return Number(n).toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        }
+
+        function escHtml(str) {
+            return String(str ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+        }
+
+        // ── Init ─────────────────────────────────────────────────────────────────
+        loadDashboard();
+        loadSlips(1);
+    </script>
+
+</body>
+
+</html>
