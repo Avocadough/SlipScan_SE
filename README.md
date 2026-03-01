@@ -8,131 +8,195 @@
 
 | Layer | Tool |
 |---|---|
-| Backend | PHP 8.0+ |
-| Frontend | Bootstrap 5 |
-| Database | MySQL 8.0 (database: `slipscan`) |
-| OCR Service | Python 3 + Flask + Typhoon OCR |
+| Backend API | Python 3 + Flask (port 8000) |
+| Frontend + OCR Service | Python 3 + Flask (port 5000) |
+| Database | Supabase PostgreSQL (cloud) |
+| OCR Engine | Typhoon OCR API |
+| Auth | JWT (PyJWT + bcrypt) |
 
 ---
 
 ## 📁 โครงสร้าง Project
 
 ```
-SE4AI_Project/
-├── backend/                  ← PHP backend API
-│   ├── src/
-│   │   ├── Config/
-│   │   │   └── Database.php  ← MySQL PDO connection
-│   │   ├── Controllers/
-│   │   │   └── AuthController.php
-│   │   ├── Middleware/
-│   │   │   └── AuthGuard.php ← JWT middleware
-│   │   └── Routes/
-│   │       └── auth.php
+SlipScan_SE/
+├── backend_flask/            ← Flask Backend API (Day 6)
+│   ├── routes/
+│   │   ├── auth.py           ← register, login, logout, me
+│   │   └── slips.py          ← upload, list, get slip
 │   ├── db/
-│   │   └── migrate.sql       ← MySQL schema
-│   ├── vendor/               ← Composer packages
-│   ├── .env                  ← Environment config
-│   ├── composer.json
-│   └── index.php             ← Entry point
-├── frontend/                 ← Bootstrap UI
-│   └── login.html
-├── ocr_service/              ← Python Flask OCR (Day 3-4)
-│   ├── app.py
+│   │   ├── migrate.sql       ← PostgreSQL schema (รันใน Supabase SQL Editor)
+│   │   └── seed.py           ← สร้าง test users
+│   ├── app.py                ← Entry point (port 8000)
+│   ├── config.py             ← Supabase DB connection
+│   ├── auth_guard.py         ← JWT middleware
+│   ├── .env                  ← (ไม่ถูก commit) ดู .env.example
+│   ├── .env.example          ← template config
 │   └── requirements.txt
-└── Ocr.py                    ← OCR core engine
+├── ocr_service/              ← Flask OCR + Frontend server (port 5000)
+│   ├── app.py
+│   ├── .env                  ← (ไม่ถูก commit) ดู .env.example
+│   └── requirements.txt
+├── frontend/                 ← Bootstrap UI (served โดย ocr_service)
+│   ├── login.html
+│   ├── register.html
+│   └── upload.html
+├── Ocr.py                    ← OCR core engine
+├── start.bat                 ← รัน services ทั้งหมดในครั้งเดียว (Windows)
+└── venv/                     ← Python virtual environment
 ```
 
 ---
 
-## 🚀 การติดตั้งและ Setup
+## 🚀 Setup Guide สำหรับ developer ใหม่
 
 ### 1. Requirements
 
-- PHP >= 8.0 + Composer
-- MySQL 8.0
-- Python 3.9+ (สำหรับ OCR service)
+- Python 3.10+
 - [Typhoon OCR API Key](https://opentyphoon.ai)
+- [Supabase](https://supabase.com) account (free tier ได้)
 
 ---
 
-### 2. Backend (PHP)
+### 2. Clone & Virtual Environment
 
 ```bash
-# เข้าไปที่ backend
-cd backend
+git clone <repo-url>
+cd SlipScan_SE
 
-# ติดตั้ง PHP dependencies
-composer install
+# สร้าง virtual environment
+python -m venv venv
 
-# คัดลอก .env
-cp .env.example .env
+# Activate (Windows)
+venv\Scripts\activate
+
+# ติดตั้ง dependencies ทั้งหมด
+pip install -r requirements.txt
+pip install -r backend_flask/requirements.txt
+pip install -r ocr_service/requirements.txt
 ```
 
-แก้ไข `.env` ให้ตรงกับ MySQL ของเครื่อง:
+---
+
+### 3. ตั้งค่า Supabase Database
+
+#### 3.1 สร้าง Supabase Project
+
+1. ไปที่ [supabase.com](https://supabase.com) → สร้าง project ใหม่
+2. เลือก Region: **Asia-Pacific (Singapore)**
+3. จด **Database Password** ไว้
+
+#### 3.2 Migrate Schema
+
+1. ไปที่ **Supabase Dashboard → SQL Editor**
+2. Copy เนื้อหาจาก `backend_flask/db/migrate.sql` แล้ว paste แล้วกด Run
+3. จะได้ 3 tables: `users`, `slips`, `slip_hashes`
+
+#### 3.3 หา Connection String
+
+1. ไปที่ **Project Settings → Database → Connect**
+2. เลือก **Method: Session Pooler** (รองรับ IPv4 ทั่วไป)
+3. Copy URI ที่ได้
+
+---
+
+### 4. ตั้งค่า Environment Files
+
+#### `backend_flask/.env`
+
+```bash
+cp backend_flask/.env.example backend_flask/.env
+```
+
+แก้ไข `backend_flask/.env`:
 
 ```env
-DB_HOST=localhost
-DB_PORT=3306
-DB_USER=root
-DB_PASS=your_password
-DB_NAME=slipscan
-
-JWT_SECRET=your_secret_key_here
+DATABASE_URL=postgresql://postgres.[project-ref]:[YOUR-PASSWORD]@aws-0-ap-southeast-1.pooler.supabase.com:5432/postgres
+JWT_SECRET=ใส่_random_string_ยาวๆ_ที่นี่
 JWT_EXPIRE=86400
+BACKEND_PORT=8000
+APP_DEBUG=false
+OCR_SERVICE_URL=http://localhost:5000/ocr
+```
+
+#### `ocr_service/.env`
+
+```bash
+cp ocr_service/.env.example ocr_service/.env
+```
+
+แก้ไข `ocr_service/.env`:
+
+```env
+TYPHOON_OCR_API_KEY=sk-xxxxxxxxxxxxxxxxxxxx
+OCR_SERVICE_PORT=5000
+OCR_MAX_FILE_SIZE_MB=10
+```
+
+> ขอ API Key ได้ที่ [opentyphoon.ai](https://opentyphoon.ai)
+
+---
+
+### 5. Seed ข้อมูล Test Users
+
+```bash
+venv\Scripts\python.exe backend_flask\db\seed.py
+```
+
+จะได้ test accounts:
+| Email | Password | Role |
+|---|---|---|
+| admin@slipscan.test | admin1234 | admin |
+| user@slipscan.test | user1234 | user |
+
+---
+
+### 6. รัน Services
+
+#### วิธีที่ 1 — ดับเบิ้ลคลิก `start.bat` (ง่ายสุด)
+
+ระบบจะเปิด 2 terminal อัตโนมัติ
+
+#### วิธีที่ 2 — รัน Manual (เปิด 2 terminal)
+
+**Terminal 1 — OCR + Frontend (port 5000):**
+```bash
+venv\Scripts\python.exe ocr_service\app.py
+```
+
+**Terminal 2 — Backend API (port 8000):**
+```bash
+venv\Scripts\python.exe backend_flask\app.py
 ```
 
 ---
 
-### 3. Database Setup
+### 7. ทดสอบ
 
-```bash
-# Import schema ไปยัง MySQL
-mysql -u root -p < db/migrate.sql
-```
-
-หรือรันใน MySQL Workbench / CLI:
-
-```sql
-source /path/to/backend/db/migrate.sql;
-```
-
-Tables ที่จะถูกสร้าง:
-- `users` — ข้อมูลผู้ใช้งาน
-- `slips` — ข้อมูลสลิปจาก OCR
-- `slip_hashes` — fingerprint สำหรับตรวจสอบซ้ำ (Sprint 2)
+| URL | คำอธิบาย |
+|---|---|
+| http://localhost:5000 | หน้าเว็บ (Login) |
+| http://localhost:8000/health | Backend health check |
+| http://localhost:5000/health | OCR service health check |
 
 ---
 
-### 4. รัน PHP Server
+## 🔐 API Endpoints
 
-```bash
-cd backend
-php -S localhost:8000 index.php
-```
-
-API พร้อมใช้งานที่ `http://localhost:8000`
-
----
-
-### 5. OCR Service (Python)
-
-```bash
-# ติดตั้ง dependencies
-pip install typhoon-ocr pillow opencv-python-headless
-
-# ตั้งค่า API key (Windows)
-$env:TYPHOON_OCR_API_KEY = "your_api_key_here"
-
-# รัน OCR แบบ standalone
-python Ocr.py slip.jpg --json
-```
+| Method | Endpoint | Description | Auth |
+|--------|----------|-------------|------|
+| `POST` | `/api/auth/register` | สมัครสมาชิก | ❌ |
+| `POST` | `/api/auth/login` | Login รับ JWT | ❌ |
+| `POST` | `/api/auth/logout` | Logout | ❌ |
+| `GET`  | `/api/auth/me` | ดูข้อมูล user | ✅ JWT |
+| `POST` | `/api/slips/upload` | อัปโหลดสลิป 1 ใบ | ✅ JWT |
+| `POST` | `/api/slips/upload-batch` | อัปโหลดสลิปหลายใบ | ✅ JWT |
+| `GET`  | `/api/slips` | ดูรายการสลิปทั้งหมด | ✅ JWT |
+| `GET`  | `/api/slips/<id>` | ดูสลิปตาม ID | ✅ JWT |
 
 ---
 
 ## 🤖 OCR Engine (`Ocr.py`)
-
-ไฟล์หลักที่ทำงานได้ทันที ประกอบด้วย 3 คลาส:
 
 | คลาส | หน้าที่ |
 |---|---|
@@ -141,63 +205,6 @@ python Ocr.py slip.jpg --json
 | `SlipParser` | Regex engine แยก field จาก raw text |
 | `SlipOCR` | Main class รวมทุกอย่างในที่เดียว |
 
-### การใช้งาน CLI
-
-```bash
-# แสดง raw text
-python Ocr.py slip.jpg
-
-# แสดง JSON บนหน้าจอ
-python Ocr.py slip.jpg --json
-
-# Export เป็นไฟล์
-python Ocr.py slip.jpg --json --export output.json
-
-# ใช้กับ self-hosted vllm
-python Ocr.py slip.jpg --local --json
-```
-
-### การใช้งาน Python API
-
-```python
-from Ocr import SlipOCR, SlipParser
-
-# OCR + Parse เป็น JSON ในครั้งเดียว
-ocr = SlipOCR(auto_parse=True)
-data = ocr.read("slip.jpg")
-
-# OCR + Auto Export
-ocr = SlipOCR(auto_parse=True, auto_export=True)
-data = ocr.read("slip.jpg")                         # สร้าง slip.json อัตโนมัติ
-data = ocr.read("slip.jpg", output_json="out.json") # ระบุ path เอง
-
-# Export / Pretty Print แยก
-parser = SlipParser()
-parser.export_json(data, "output.json")
-parser.pretty_print(data)
-```
-
-### Batch Processing
-
-```python
-from pathlib import Path
-from Ocr import SlipOCR, SlipParser
-
-ocr    = SlipOCR(auto_parse=True)
-parser = SlipParser()
-
-results = []
-for slip_path in Path("slips/").glob("*.jpg"):
-    try:
-        data = ocr.read(str(slip_path))
-        results.append(data)
-        parser.export_json(data, f"outputs/{slip_path.stem}.json")
-    except Exception as e:
-        print(f"Failed: {slip_path.name} — {e}")
-
-parser.export_json({"total": len(results), "slips": results}, "outputs/all.json")
-```
-
 ### Fields ที่แยกได้
 
 | Field | Pattern ที่รองรับ |
@@ -205,83 +212,32 @@ parser.export_json({"total": len(results), "slips": results}, "outputs/all.json"
 | `amount` | `1,234.56` · `฿1,000` · `THB 500` |
 | `bank_name` | KBank · SCB · KTB · BBL · TTB · GSB · BAY · CIMB · UOB |
 | `slip_date` | `15/01/2568` · `15-01-25` (แปลง พ.ศ. → ค.ศ. อัตโนมัติ) |
-| `slip_time` | `14:30:25` · `14:30` · `2:30 PM` |
 | `ref_no` | REF + ตัวอักษร/ตัวเลข 6–20 ตัว |
-| `sender_name` | ชื่อก่อน/หลังคำว่า "จาก" |
-| `receiver_name` | ชื่อก่อน/หลังคำว่า "ถึง"/"หาก" |
-| `receiver_account` | Pattern `xxx-x-xxxxx-x` |
 
 ---
 
-## 🔐 Auth API Endpoints
+## 📝 Changelog
 
-| Method | Endpoint | Description | Auth |
-|--------|----------|-------------|------|
-| `POST` | `/api/auth/register` | สมัครสมาชิก | ❌ |
-| `POST` | `/api/auth/login` | Login รับ JWT | ❌ |
-| `POST` | `/api/auth/logout` | Logout | ❌ |
-| `GET`  | `/api/auth/me` | ดูข้อมูล user ปัจจุบัน | ✅ JWT |
+### Day 6 (Sprint 1) — วันนี้
+- 🔄 **เปลี่ยน Backend** จาก PHP → **Python Flask**
+- 🔄 **เปลี่ยน Database** จาก MySQL (local) → **Supabase PostgreSQL** (cloud)
+- ✅ สร้าง `backend_flask/` พร้อม routes, config, auth, seed
+- ✅ อัปเดต `start.bat` ให้รัน Flask backend แทน PHP
+- ✅ แก้ไข frontend ให้ API_BASE ชี้ `localhost` แทน hardcode IP
+- ✅ อัปเดต `.gitignore` ให้ครอบคลุม `.env` ทุกตัว
 
-### ตัวอย่าง Register
+### Day 5 (Sprint 1)
+- เพิ่ม Register page
+- LAN access support
+- Bootstrap Upload UI + Batch upload frontend
 
-```bash
-curl -X POST http://localhost:8000/api/auth/register \
-  -H "Content-Type: application/json" \
-  -d '{"email":"user@example.com","password":"Password123!"}'
-```
-
-### ตัวอย่าง Login
-
-```bash
-curl -X POST http://localhost:8000/api/auth/login \
-  -H "Content-Type: application/json" \
-  -d '{"email":"user@example.com","password":"Password123!"}'
-```
-
-Response:
-```json
-{
-  "success": true,
-  "token": "eyJhbGciOiJIUzI1NiJ9...",
-  "user": { "id": 1, "email": "user@example.com", "role": "user" }
-}
-```
-
-### ตัวอย่าง Protected Route
-
-```bash
-curl http://localhost:8000/api/auth/me \
-  -H "Authorization: Bearer <token>"
-```
-
----
-
-## 📊 OCR JSON Output Format
-
-```json
-{
-  "sender_name": "นาย สมชาย ใจดี",
-  "bank_name": "กสิกรไทย",
-  "amount": 1500.00,
-  "slip_date": "2025-01-15",
-  "slip_time": "14:30:25",
-  "ref_no": "REF20250115001",
-  "receiver_name": "ร้านค้าออนไลน์",
-  "receiver_account": "xxx-x-x1234-x",
-  "raw_ocr": "..."
-}
-```
-
----
-
-## 🔧 ธนาคารที่รองรับ
-
-KBank · SCB · KTB · BBL · TTB · GSB · BAY · TBANK · CIMB · UOB
+### Day 3-4 (Sprint 1)
+- OCR Service (Flask) serve frontend HTML
+- Typhoon OCR integration
 
 ---
 
 ## 📚 เอกสารอ้างอิง
 
 - [Typhoon OCR API](https://opentyphoon.ai)
-- Sprint Plan: `sprint_1.md`, `sprint_2.md`, `sprint_3.md`
-- Research: `research.md`
+- [Supabase Docs](https://supabase.com/docs)
