@@ -10,3 +10,7 @@ backend/composer.lock
 # Uploads (temp files)
 backend/uploads/
 *.log
+
+# Planning docs
+sprint_*.md
+research.md
