@@ -85,7 +85,7 @@ def login():
         "iss":   "slipscan",
         "iat":   now,
         "exp":   now + expire,
-        "sub":   user["id"],
+        "sub":   str(user["id"]),   # PyJWT 2.x ต้องการ string
         "email": user["email"],
         "role":  user["role"],
     }

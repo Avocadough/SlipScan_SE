@@ -4,12 +4,13 @@ SlipScan Flask Backend API — แทน PHP backend
 รัน: python app.py
 """
 import os
+from pathlib import Path
 from flask import Flask, jsonify
 from flask_cors import CORS
 from dotenv import load_dotenv
 
-# โหลด .env ก่อน import อื่น
-load_dotenv()
+# โหลด .env จาก backend_flask/ เสมอ ไม่ว่าจะรันจาก directory ไหน
+load_dotenv(Path(__file__).parent / ".env")
 
 from routes.auth  import auth_bp
 from routes.slips import slips_bp

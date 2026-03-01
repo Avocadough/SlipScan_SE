@@ -423,6 +423,9 @@
         if (!token) { window.location.href = 'login.html'; }
         document.getElementById('userEmail').textContent = user.email || 'ผู้ใช้';
 
+        // อ่าน token ใหม่ทุกครั้งเพื่อป้องกัน stale token
+        function getToken() { return localStorage.getItem('slipscan_token'); }
+
         function logout() {
             localStorage.removeItem('slipscan_token');
             localStorage.removeItem('slipscan_user');
@@ -520,7 +523,7 @@
 
                     const res = await fetch(`${API_BASE}${endpoint}`, {
                         method: 'POST',
-                        headers: { Authorization: `Bearer ${token}` },
+                        headers: { Authorization: `Bearer ${getToken()}` },
                         body: form,
                     });
                     const data = await res.json();

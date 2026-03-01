@@ -32,7 +32,7 @@ def serve_upload(filename):
 @slips_bp.post("/upload")
 @require_auth
 def upload():
-    user_id = request.current_user["sub"]
+    user_id = int(request.current_user["sub"])
 
     if "file" not in request.files:
         return jsonify({"success": False, "message": "No file uploaded (field: 'file')"}), 400
@@ -75,7 +75,7 @@ def upload():
 @slips_bp.post("/upload-batch")
 @require_auth
 def upload_batch():
-    user_id = request.current_user["sub"]
+    user_id = int(request.current_user["sub"])
     files   = request.files.getlist("files")
 
     if not files:
@@ -137,7 +137,7 @@ def upload_batch():
 @slips_bp.get("/<int:slip_id>")
 @require_auth
 def get_by_id(slip_id):
-    user_id = request.current_user["sub"]
+    user_id = int(request.current_user["sub"])
     conn    = get_db()
 
     with conn.cursor() as cur:
@@ -158,7 +158,7 @@ def get_by_id(slip_id):
 @slips_bp.get("/")
 @require_auth
 def list_all():
-    user_id  = request.current_user["sub"]
+    user_id  = int(request.current_user["sub"])
     page     = max(1, int(request.args.get("page", 1)))
     per_page = min(50, max(1, int(request.args.get("per_page", 20))))
     offset   = (page - 1) * per_page
