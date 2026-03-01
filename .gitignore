@@ -7,9 +7,23 @@ backend/vendor/
 backend/.env
 backend/composer.lock
 
+# Flask backend
+backend_flask/.env
+backend_flask/uploads/
+
+# OCR service secrets
+ocr_service/.env
+
+# Misc
+$null
+
 # Uploads (temp files)
 backend/uploads/
+ocr_service/temp_uploads/
 *.log
+
+# Test images (ข้อมูลส่วนตัว)
+test_img/
 
 # Planning docs
 sprint_*.md
