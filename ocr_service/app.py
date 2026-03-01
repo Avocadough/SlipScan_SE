@@ -10,7 +10,7 @@ import uuid
 import logging
 from pathlib import Path
 
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, send_from_directory, redirect
 from dotenv import load_dotenv
 
 # โหลด .env
@@ -19,6 +19,8 @@ load_dotenv()
 # เพิ่ม root project ใน sys.path เพื่อ import Ocr.py
 ROOT_DIR = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT_DIR))
+
+FRONTEND_DIR = ROOT_DIR / "frontend"
 
 from Ocr import SlipOCR, SlipParser  # noqa: E402
 
@@ -42,6 +44,19 @@ ocr_engine = SlipOCR(
     preprocess=True,
 )
 slip_parser = SlipParser()
+
+
+# ── Serve Frontend ────────────────────────────────────────────────────────────
+@app.get("/")
+def index():
+    """เปิด IP → redirect ไปหน้า login ทันที"""
+    return redirect("/login.html")
+
+
+@app.get("/<path:filename>")
+def serve_frontend(filename):
+    """Serve static HTML/CSS/JS จาก frontend/ folder"""
+    return send_from_directory(str(FRONTEND_DIR), filename)
 
 
 # ── Health Check ──────────────────────────────────────────────────────────────
