@@ -5,8 +5,8 @@ Endpoints: upload, upload-batch, get by id, list all
 import os
 import uuid
 import json
-import hashlib
 import requests
+from datetime import datetime
 from pathlib import Path
 from flask import Blueprint, request, jsonify, send_from_directory
 from config import get_db
@@ -226,31 +226,59 @@ def _call_ocr(file_path: str) -> tuple[dict | None, list[str]]:
         return None, warnings
 
 
+def _safe_date(val: str | None) -> str | None:
+    """Validate ISO date string — คืน None ถ้า OCR ส่งค่าผิดรูปแบบ"""
+    if not val:
+        return None
+    try:
+        datetime.strptime(str(val), "%Y-%m-%d")
+        return str(val)
+    except ValueError:
+        return None
+
+
+def _safe_time(val: str | None) -> str | None:
+    """Validate time string — รองรับ HH:MM:SS หรือ HH:MM"""
+    if not val:
+        return None
+    for fmt in ("%H:%M:%S", "%H:%M"):
+        try:
+            datetime.strptime(str(val), fmt)
+            return str(val)
+        except ValueError:
+            continue
+    return None
+
+
 def _save_slip(user_id: int, image_path: str, data: dict) -> int:
     conn = get_db()
     raw_ocr = json.dumps(data.get("raw_ocr"), ensure_ascii=False) if data.get("raw_ocr") else None
 
-    with conn.cursor() as cur:
-        cur.execute(
-            """INSERT INTO slips
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                """INSERT INTO slips
                (user_id, image_path, sender_name, bank_name, amount,
                 slip_date, slip_time, ref_no, receiver_name, receiver_acct, raw_ocr)
                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                RETURNING id""",
-            (
-                user_id,
-                image_path,
-                data.get("sender_name"),
-                data.get("bank_name"),
-                data.get("amount"),
-                data.get("slip_date") or None,
-                data.get("slip_time") or None,
-                data.get("ref_no"),
-                data.get("receiver_name"),
-                data.get("receiver_account"),
-                raw_ocr,
-            ),
-        )
-        slip_id = cur.fetchone()["id"]
-        conn.commit()
-    return slip_id
+                (
+                    user_id,
+                    image_path,
+                    data.get("sender_name"),
+                    data.get("bank_name"),
+                    data.get("amount"),
+                    _safe_date(data.get("slip_date")),   # sanitize
+                    _safe_time(data.get("slip_time")),   # sanitize
+                    data.get("ref_no"),
+                    data.get("receiver_name"),
+                    data.get("receiver_account"),
+                    raw_ocr,
+                ),
+            )
+            slip_id = cur.fetchone()["id"]
+            conn.commit()
+        return slip_id
+    except Exception:
+        conn.rollback()   # รีเซ็ต transaction ที่พังเสมอ
+        raise
