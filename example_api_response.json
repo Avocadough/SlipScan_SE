@@ -1,0 +1,16 @@
+{
+  "success": true,
+  "slip_id": 42,
+  "data": {
+    "sender_name": "นาย สมชาย ใจดี",
+    "bank_name": "กสิกรไทย",
+    "amount": 1500.0,
+    "slip_date": "2025-01-15",
+    "slip_time": "14:30:25",
+    "ref_no": "REF20250115001",
+    "receiver_name": "ร้านค้าออนไลน์",
+    "receiver_account": "xxx-x-x6789-x"
+  },
+  "raw_ocr": "ธนาคารกสิกรไทย\nKASIKORNBANK\n\nโอนเงิน\nFund Transfer\n\nจาก: นาย สมชาย ใจดี\nFrom: Mr. Somchai Jaidee\n\nถึง: ร้านค้าออนไลน์\nTo: Online Shop\n\nบัญชี: 123-4-56789-0\nAccount: 123-4-56789-0\n\nจำนวนเงิน\nAmount\n฿ 1,500.00\n\nวันที่: 15/01/2568\nDate: 15/01/2025\n\nเวลา: 14:30:25\nTime: 14:30:25\n\nหมายเลขอ้างอิง\nReference No.\nREF20250115001",
+  "warnings": []
+}
