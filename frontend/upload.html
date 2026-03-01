@@ -1,0 +1,618 @@
+<!DOCTYPE html>
+<html lang="th">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>SlipScan — อัพโหลดสลิป</title>
+    <meta name="description" content="SlipScan - อัพโหลดสลิปโอนเงิน วิเคราะห์ด้วย AI" />
+
+    <!-- Bootstrap 5 -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" />
+    <!-- Bootstrap Icons -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet" />
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+
+    <style>
+        :root {
+            --primary: #4f46e5;
+            --primary-dk: #3730a3;
+            --success-c: #22c55e;
+            --danger-c: #ef4444;
+            --surface: rgba(255, 255, 255, 0.07);
+            --border: rgba(255, 255, 255, 0.15);
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            min-height: 100vh;
+            background: linear-gradient(135deg, #0f0c29 0%, #302b63 50%, #24243e 100%);
+            color: #fff;
+            padding: 1.5rem;
+        }
+
+        /* ── Navbar ── */
+        .topbar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: .75rem 1.5rem;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid var(--border);
+            border-radius: 1rem;
+            margin-bottom: 2rem;
+            backdrop-filter: blur(16px);
+        }
+
+        .brand {
+            font-size: 1.4rem;
+            font-weight: 700;
+        }
+
+        .brand span {
+            color: #818cf8;
+        }
+
+        .user-badge {
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid var(--border);
+            border-radius: 2rem;
+            padding: .35rem 1rem;
+            font-size: .85rem;
+            display: flex;
+            gap: .5rem;
+            align-items: center;
+        }
+
+        .btn-logout {
+            background: transparent;
+            border: 1px solid rgba(239, 68, 68, .5);
+            color: #fca5a5;
+            border-radius: .5rem;
+            padding: .3rem .75rem;
+            font-size: .8rem;
+            cursor: pointer;
+            transition: background .15s;
+        }
+
+        .btn-logout:hover {
+            background: rgba(239, 68, 68, .15);
+        }
+
+        /* ── Card ── */
+        .glass-card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 1.25rem;
+            padding: 2rem;
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            margin-bottom: 1.5rem;
+            animation: fadeUp .4s ease-out;
+        }
+
+        @keyframes fadeUp {
+            from {
+                opacity: 0;
+                transform: translateY(16px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        /* ── Drop Zone ── */
+        #dropZone {
+            border: 2px dashed rgba(129, 140, 248, .5);
+            border-radius: 1rem;
+            padding: 3rem 2rem;
+            text-align: center;
+            cursor: pointer;
+            transition: border-color .2s, background .2s;
+            position: relative;
+        }
+
+        #dropZone.drag-over {
+            border-color: #818cf8;
+            background: rgba(129, 140, 248, .1);
+        }
+
+        #dropZone input[type="file"] {
+            position: absolute;
+            inset: 0;
+            opacity: 0;
+            cursor: pointer;
+            width: 100%;
+            height: 100%;
+        }
+
+        .drop-icon {
+            font-size: 3rem;
+            color: #818cf8;
+            margin-bottom: .75rem;
+        }
+
+        .drop-label {
+            color: rgba(255, 255, 255, .7);
+            font-size: .95rem;
+        }
+
+        .drop-hint {
+            color: rgba(255, 255, 255, .4);
+            font-size: .8rem;
+            margin-top: .35rem;
+        }
+
+        /* ── Preview grid ── */
+        #previewGrid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(90px, 1fr));
+            gap: .75rem;
+            margin-top: 1.25rem;
+        }
+
+        .preview-item {
+            position: relative;
+            border-radius: .75rem;
+            overflow: hidden;
+            aspect-ratio: 1;
+            border: 2px solid var(--border);
+        }
+
+        .preview-item img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .preview-remove {
+            position: absolute;
+            top: 4px;
+            right: 4px;
+            background: rgba(0, 0, 0, .6);
+            border: none;
+            color: #fff;
+            border-radius: 50%;
+            width: 22px;
+            height: 22px;
+            font-size: .7rem;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        /* ── Buttons ── */
+        .btn-upload {
+            background: linear-gradient(135deg, var(--primary), #818cf8);
+            border: none;
+            border-radius: .75rem;
+            color: #fff;
+            font-weight: 600;
+            font-size: 1rem;
+            padding: .8rem 2rem;
+            transition: transform .15s, box-shadow .15s;
+            box-shadow: 0 4px 16px rgba(79, 70, 229, .4);
+            cursor: pointer;
+        }
+
+        .btn-upload:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 24px rgba(79, 70, 229, .5);
+        }
+
+        .btn-upload:disabled {
+            opacity: .6;
+            transform: none;
+            cursor: not-allowed;
+        }
+
+        /* ── Results ── */
+        .result-card {
+            background: rgba(255, 255, 255, 0.04);
+            border: 1px solid var(--border);
+            border-radius: 1rem;
+            margin-bottom: 1rem;
+            overflow: hidden;
+            animation: fadeUp .3s ease-out;
+        }
+
+        .result-header {
+            display: flex;
+            align-items: center;
+            gap: .75rem;
+            padding: .85rem 1.25rem;
+            background: rgba(255, 255, 255, 0.05);
+            cursor: pointer;
+        }
+
+        .result-header .badge-status {
+            font-size: .75rem;
+            padding: .25rem .65rem;
+            border-radius: 2rem;
+            font-weight: 600;
+        }
+
+        .badge-ok {
+            background: rgba(34, 197, 94, .2);
+            color: #86efac;
+            border: 1px solid rgba(34, 197, 94, .4);
+        }
+
+        .badge-fail {
+            background: rgba(239, 68, 68, .2);
+            color: #fca5a5;
+            border: 1px solid rgba(239, 68, 68, .4);
+        }
+
+        .result-header .fname {
+            font-size: .9rem;
+            flex: 1;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .result-body {
+            padding: 1.25rem;
+            display: none;
+        }
+
+        .result-body.open {
+            display: block;
+        }
+
+        .field-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: .5rem .75rem;
+            font-size: .85rem;
+        }
+
+        .field-label {
+            color: rgba(255, 255, 255, .5);
+        }
+
+        .field-value {
+            color: #fff;
+            font-weight: 500;
+        }
+
+        .raw-ocr-box {
+            margin-top: 1rem;
+            background: rgba(0, 0, 0, .3);
+            border: 1px solid var(--border);
+            border-radius: .5rem;
+            padding: .75rem 1rem;
+            font-size: .78rem;
+            color: rgba(255, 255, 255, .6);
+            max-height: 150px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            font-family: monospace;
+        }
+
+        .warning-badge {
+            font-size: .75rem;
+            color: #fde68a;
+            background: rgba(234, 179, 8, .1);
+            border: 1px solid rgba(234, 179, 8, .3);
+            border-radius: .4rem;
+            padding: .2rem .5rem;
+            display: inline-block;
+            margin: .1rem;
+        }
+
+        /* ── Progress bar ── */
+        #progressWrap {
+            display: none;
+            margin-top: 1rem;
+        }
+
+        .prog-bar-bg {
+            background: rgba(255, 255, 255, .1);
+            border-radius: 1rem;
+            height: 8px;
+            overflow: hidden;
+        }
+
+        .prog-bar-fill {
+            background: linear-gradient(90deg, var(--primary), #818cf8);
+            height: 100%;
+            border-radius: 1rem;
+            transition: width .3s;
+        }
+
+        .prog-label {
+            font-size: .82rem;
+            color: rgba(255, 255, 255, .6);
+            margin-top: .35rem;
+        }
+
+        /* ── Responsive ── */
+        @media (max-width: 576px) {
+            .field-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .topbar {
+                flex-direction: column;
+                gap: .5rem;
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+    <!-- Navbar -->
+    <nav class="topbar">
+        <div class="brand">Slip<span>Scan</span></div>
+        <div class="d-flex align-items-center gap-2">
+            <div class="user-badge">
+                <i class="bi bi-person-circle"></i>
+                <span id="userEmail">กำลังโหลด...</span>
+            </div>
+            <button class="btn-logout" onclick="logout()">
+                <i class="bi bi-box-arrow-right me-1"></i>ออกจากระบบ
+            </button>
+        </div>
+    </nav>
+
+    <!-- Upload Card -->
+    <div class="glass-card">
+        <h5 class="mb-1"><i class="bi bi-upload me-2 text-indigo-400"></i>อัพโหลดสลิป</h5>
+        <p class="text-white-50 mb-3" style="font-size:.85rem">รองรับ jpg, png, webp • สูงสุด 10MB ต่อไฟล์ • ไม่เกิน 20
+            ไฟล์ต่อครั้ง</p>
+
+        <!-- Drop Zone -->
+        <div id="dropZone">
+            <input type="file" id="fileInput" accept="image/jpeg,image/png,image/webp" multiple />
+            <div class="drop-icon"><i class="bi bi-cloud-arrow-up"></i></div>
+            <div class="drop-label">ลากและวางไฟล์สลิปที่นี่</div>
+            <div class="drop-hint">หรือคลิกเพื่อเลือกไฟล์</div>
+        </div>
+
+        <!-- Preview -->
+        <div id="previewGrid"></div>
+
+        <!-- Progress -->
+        <div id="progressWrap">
+            <div class="prog-bar-bg">
+                <div class="prog-bar-fill" id="progFill" style="width:0%"></div>
+            </div>
+            <div class="prog-label" id="progLabel">กำลังประมวลผล...</div>
+        </div>
+
+        <!-- Actions -->
+        <div class="d-flex gap-2 mt-3 flex-wrap">
+            <button class="btn-upload" id="uploadBtn" disabled onclick="startUpload()">
+                <i class="bi bi-cpu me-2"></i>วิเคราะห์สลิป
+            </button>
+            <button class="btn btn-link text-white-50 text-decoration-none" onclick="clearAll()"
+                style="font-size:.85rem">
+                <i class="bi bi-trash3 me-1"></i>ล้างทั้งหมด
+            </button>
+        </div>
+    </div>
+
+    <!-- Results -->
+    <div id="resultsSection" style="display:none">
+        <div class="d-flex align-items-center justify-content-between mb-2">
+            <h5 class="mb-0"><i class="bi bi-bar-chart me-2 text-indigo-400"></i>ผลการวิเคราะห์</h5>
+            <div id="summaryBadge" class="d-flex gap-2"></div>
+        </div>
+        <div id="resultsList"></div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        const API_BASE = 'http://localhost:8000';
+        let selectedFiles = [];
+
+        // ── Auth guard ──────────────────────────────────────────────────────────
+        const token = localStorage.getItem('slipscan_token');
+        const user = JSON.parse(localStorage.getItem('slipscan_user') || '{}');
+        if (!token) { window.location.href = 'login.html'; }
+        document.getElementById('userEmail').textContent = user.email || 'ผู้ใช้';
+
+        function logout() {
+            localStorage.removeItem('slipscan_token');
+            localStorage.removeItem('slipscan_user');
+            window.location.href = 'login.html';
+        }
+
+        // ── Drop Zone ───────────────────────────────────────────────────────────
+        const dropZone = document.getElementById('dropZone');
+        const fileInput = document.getElementById('fileInput');
+        const uploadBtn = document.getElementById('uploadBtn');
+
+        dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('drag-over'); });
+        dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
+        dropZone.addEventListener('drop', e => {
+            e.preventDefault();
+            dropZone.classList.remove('drag-over');
+            addFiles([...e.dataTransfer.files]);
+        });
+        fileInput.addEventListener('change', () => {
+            addFiles([...fileInput.files]);
+            fileInput.value = '';
+        });
+
+        function addFiles(newFiles) {
+            const allowed = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
+            const toAdd = newFiles.filter(f => allowed.includes(f.type));
+            const total = selectedFiles.length + toAdd.length;
+
+            if (total > 20) {
+                alert(`เลือกได้สูงสุด 20 ไฟล์ (ปัจจุบัน ${selectedFiles.length} ไฟล์)`);
+                return;
+            }
+            selectedFiles.push(...toAdd);
+            renderPreviews();
+        }
+
+        function renderPreviews() {
+            const grid = document.getElementById('previewGrid');
+            grid.innerHTML = '';
+            selectedFiles.forEach((file, i) => {
+                const div = document.createElement('div');
+                div.className = 'preview-item';
+                const img = document.createElement('img');
+                img.src = URL.createObjectURL(file);
+                img.alt = file.name;
+                const btn = document.createElement('button');
+                btn.className = 'preview-remove';
+                btn.innerHTML = '<i class="bi bi-x"></i>';
+                btn.onclick = () => { selectedFiles.splice(i, 1); renderPreviews(); };
+                div.appendChild(img);
+                div.appendChild(btn);
+                grid.appendChild(div);
+            });
+            uploadBtn.disabled = selectedFiles.length === 0;
+        }
+
+        function clearAll() {
+            selectedFiles = [];
+            renderPreviews();
+            document.getElementById('resultsSection').style.display = 'none';
+            document.getElementById('resultsList').innerHTML = '';
+            document.getElementById('progressWrap').style.display = 'none';
+        }
+
+        // ── Upload ──────────────────────────────────────────────────────────────
+        async function startUpload() {
+            if (!selectedFiles.length) return;
+
+            uploadBtn.disabled = true;
+            const progWrap = document.getElementById('progressWrap');
+            const progFill = document.getElementById('progFill');
+            const progLabel = document.getElementById('progLabel');
+            const resultSection = document.getElementById('resultsSection');
+            const resultsList = document.getElementById('resultsList');
+
+            progWrap.style.display = 'block';
+            resultSection.style.display = 'none';
+            resultsList.innerHTML = '';
+
+            const results = [];
+
+            for (let i = 0; i < selectedFiles.length; i++) {
+                const file = selectedFiles[i];
+                const pct = Math.round(((i) / selectedFiles.length) * 100);
+                progFill.style.width = pct + '%';
+                progLabel.textContent = `กำลังวิเคราะห์ ${i + 1}/${selectedFiles.length}: ${file.name}`;
+
+                try {
+                    const endpoint = selectedFiles.length === 1
+                        ? '/api/slips/upload'
+                        : '/api/slips/upload';  // send one at a time for progress
+
+                    const form = new FormData();
+                    form.append('file', file);
+
+                    const res = await fetch(`${API_BASE}${endpoint}`, {
+                        method: 'POST',
+                        headers: { Authorization: `Bearer ${token}` },
+                        body: form,
+                    });
+                    const data = await res.json();
+                    results.push({ file: file.name, ok: true, data });
+                } catch (err) {
+                    results.push({ file: file.name, ok: false, error: err.message });
+                }
+            }
+
+            progFill.style.width = '100%';
+            progLabel.textContent = `เสร็จแล้ว! ${results.length} ไฟล์`;
+
+            renderResults(results);
+            uploadBtn.disabled = false;
+        }
+
+        // ── Render Results ──────────────────────────────────────────────────────
+        function renderResults(results) {
+            const section = document.getElementById('resultsSection');
+            const list = document.getElementById('resultsList');
+            const badge = document.getElementById('summaryBadge');
+
+            const ok = results.filter(r => r.ok && r.data?.success).length;
+            const fail = results.length - ok;
+
+            badge.innerHTML = `
+            <span class="badge-status badge-ok">${ok} สำเร็จ</span>
+            ${fail ? `<span class="badge-status badge-fail">${fail} ล้มเหลว</span>` : ''}
+        `;
+
+            list.innerHTML = '';
+
+            results.forEach((r, i) => {
+                const isOk = r.ok && r.data?.success;
+                const d = r.data?.data || {};
+                const warns = r.data?.warnings || [];
+
+                const card = document.createElement('div');
+                card.className = 'result-card';
+
+                card.innerHTML = `
+                <div class="result-header" onclick="toggleResult(${i})">
+                    <i class="bi ${isOk ? 'bi-check-circle-fill text-success' : 'bi-x-circle-fill text-danger'}"></i>
+                    <span class="fname">${escHtml(r.file)}</span>
+                    <span class="badge-status ${isOk ? 'badge-ok' : 'badge-fail'}">${isOk ? 'OK' : 'FAIL'}</span>
+                    ${r.data?.slip_id ? `<span class="text-white-50" style="font-size:.78rem">#${r.data.slip_id}</span>` : ''}
+                    <i class="bi bi-chevron-down ms-1 text-white-50" id="chev-${i}"></i>
+                </div>
+                <div class="result-body" id="body-${i}">
+                    ${isOk ? `
+                    <div class="field-grid">
+                        ${fieldRow('ผู้โอน', d.sender_name)}
+                        ${fieldRow('ธนาคาร', d.bank_name)}
+                        ${fieldRow('จำนวนเงิน', d.amount != null ? Number(d.amount).toLocaleString('th-TH', { minimumFractionDigits: 2 }) + ' บาท' : null)}
+                        ${fieldRow('วันที่', d.slip_date)}
+                        ${fieldRow('เวลา', d.slip_time)}
+                        ${fieldRow('Ref No.', d.ref_no)}
+                        ${fieldRow('ผู้รับ', d.receiver_name)}
+                        ${fieldRow('บัญชีรับ', d.receiver_acct)}
+                    </div>
+                    ${warns.length ? `<div class="mt-2">${warns.map(w => `<span class="warning-badge"><i class="bi bi-exclamation-triangle me-1"></i>${escHtml(w)}</span>`).join('')}</div>` : ''}
+                    ${r.data?.raw_ocr ? `<div class="raw-ocr-box">${escHtml(r.data.raw_ocr)}</div>` : ''}
+                    ` : `
+                    <p class="text-danger mb-0"><i class="bi bi-x-circle me-1"></i>${escHtml(r.error || r.data?.message || 'เกิดข้อผิดพลาด')}</p>
+                    `}
+                </div>
+            `;
+                list.appendChild(card);
+            });
+
+            section.style.display = 'block';
+            section.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+
+        function toggleResult(i) {
+            const body = document.getElementById(`body-${i}`);
+            const chev = document.getElementById(`chev-${i}`);
+            body.classList.toggle('open');
+            chev.style.transform = body.classList.contains('open') ? 'rotate(180deg)' : '';
+        }
+
+        function fieldRow(label, value) {
+            const val = value != null && value !== '' ? escHtml(String(value)) : '<span class="text-white-25">—</span>';
+            return `<div><div class="field-label">${label}</div><div class="field-value">${val}</div></div>`;
+        }
+
+        function escHtml(str) {
+            return String(str ?? '')
+                .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+        }
+    </script>
+</body>
+
+</html>
