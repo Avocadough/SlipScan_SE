@@ -18,6 +18,7 @@ from routes.slips import slips_bp
 # ── App setup ────────────────────────────────────────────────────────────────
 app = Flask(__name__)
 CORS(app, origins="*", supports_credentials=True)
+app.url_map.strict_slashes = False  # ไม่ redirect trailing slash (ป้องกัน Auth header หาย)
 
 # ── Register blueprints ──────────────────────────────────────────────────────
 app.register_blueprint(auth_bp)
