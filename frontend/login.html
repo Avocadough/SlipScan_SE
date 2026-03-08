@@ -283,8 +283,8 @@
         const loginBtn = document.getElementById('loginBtn');
 
         // Redirect if already logged in
-        if (localStorage.getItem('slipscan_token')) {
-            window.location.href = 'upload.html';
+        if (sessionStorage.getItem('slipscan_token')) {
+            window.location.href = 'dashboard.html';
         }
 
         function showAlert(type, msg) {
@@ -324,10 +324,10 @@
                 const data = await res.json();
 
                 if (res.ok && data.success) {
-                    localStorage.setItem('slipscan_token', data.token);
-                    localStorage.setItem('slipscan_user', JSON.stringify(data.user));
+                    sessionStorage.setItem('slipscan_token', data.token);
+                    sessionStorage.setItem('slipscan_user', JSON.stringify(data.user));
                     showAlert('success', 'เข้าสู่ระบบสำเร็จ! กำลังพาไปยังหน้าหลัก...');
-                    setTimeout(() => { window.location.href = 'upload.html'; }, 1000);
+                    setTimeout(() => { window.location.href = 'dashboard.html'; }, 1000);
                 } else {
                     showAlert('error', data.message || 'อีเมลหรือรหัสผ่านไม่ถูกต้อง');
                 }

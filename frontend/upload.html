@@ -497,17 +497,17 @@
         let selectedFiles = [];
 
         // ── Auth guard ──────────────────────────────────────────────────────────
-        const token = localStorage.getItem('slipscan_token');
-        const user = JSON.parse(localStorage.getItem('slipscan_user') || '{}');
+        const token = sessionStorage.getItem('slipscan_token');
+        const user = JSON.parse(sessionStorage.getItem('slipscan_user') || '{}');
         if (!token) { window.location.href = 'login.html'; }
         document.getElementById('userEmail').textContent = user.email || 'ผู้ใช้';
 
         // อ่าน token ใหม่ทุกครั้งเพื่อป้องกัน stale token
-        function getToken() { return localStorage.getItem('slipscan_token'); }
+        function getToken() { return sessionStorage.getItem('slipscan_token'); }
 
         function logout() {
-            localStorage.removeItem('slipscan_token');
-            localStorage.removeItem('slipscan_user');
+            sessionStorage.removeItem('slipscan_token');
+            sessionStorage.removeItem('slipscan_user');
             window.location.href = 'login.html';
         }
 

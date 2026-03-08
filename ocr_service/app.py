@@ -182,4 +182,4 @@ def not_found(e):
 if __name__ == "__main__":
     port = int(os.getenv("OCR_SERVICE_PORT", 5000))
     logger.info(f"🚀 OCR Service starting on http://localhost:{port}")
-    app.run(host="0.0.0.0", port=port, debug=False)
+    app.run(host="0.0.0.0", port=port, debug=True)

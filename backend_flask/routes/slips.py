@@ -63,6 +63,16 @@ def upload():
         warnings.append("OCR service unavailable or failed")
         ocr_data = {}
 
+    # ตรวจสอบสลิปปลอมผ่าน Thunder Solution (เทียบกับข้อมูล OCR)
+    is_fake, fake_reason = _call_thunder_verify(
+        str(dest), 
+        ocr_amount=ocr_data.get("amount"), 
+        ocr_ref=ocr_data.get("ref_no")
+    )
+    if is_fake:
+        ocr_data["is_fake"] = True
+        warnings.append(f"สลิปปลอม/ตรวจสอบไม่ผ่าน: {fake_reason}")
+
     if is_dup:
         warnings.append(f"⚠️ สลิปซ้ำกับรายการ #{dup_slip_id}")
 
@@ -139,6 +149,16 @@ def upload_batch():
         if ocr_data is None:
             warnings.append("OCR service unavailable")
             ocr_data = {}
+
+        # ตรวจสอบสลิปปลอมผ่าน Thunder Solution (เทียบกับข้อมูล OCR)
+        is_fake_slip, fake_reason = _call_thunder_verify(
+            str(dest),
+            ocr_amount=ocr_data.get("amount"),
+            ocr_ref=ocr_data.get("ref_no")
+        )
+        if is_fake_slip:
+            ocr_data["is_fake"] = True
+            warnings.append(f"สลิปปลอม/ตรวจสอบไม่ผ่าน: {fake_reason}")
 
         if is_dup:
             warnings.append(f"⚠️ สลิปซ้ำกับรายการ #{dup_slip_id}")
@@ -392,11 +412,11 @@ def dashboard():
         # ── Summary totals ──
         cur.execute(
             """SELECT
-                COUNT(*)                           AS total_slips,
-                COALESCE(SUM(amount), 0)           AS total_amount,
-                COALESCE(AVG(amount), 0)           AS avg_amount,
-                COUNT(*) FILTER (WHERE is_fake)    AS fake_count,
-                COUNT(*) FILTER (WHERE is_duplicate) AS dup_count
+                COUNT(*) FILTER (WHERE NOT is_fake AND NOT is_duplicate) AS total_slips,
+                COALESCE(SUM(amount) FILTER (WHERE NOT is_fake AND NOT is_duplicate), 0) AS total_amount,
+                COALESCE(AVG(amount) FILTER (WHERE NOT is_fake AND NOT is_duplicate), 0) AS avg_amount,
+                COUNT(*) FILTER (WHERE is_fake)     AS fake_count,
+                COUNT(*) FILTER (WHERE is_duplicate AND NOT is_fake) AS dup_count
                FROM slips WHERE user_id = %s""",
             (user_id,),
         )
@@ -405,10 +425,10 @@ def dashboard():
         # ── Bank ranking ──
         cur.execute(
             """SELECT bank_name,
-                      COUNT(*)              AS slip_count,
+                      COUNT(*)                 AS slip_count,
                       COALESCE(SUM(amount), 0) AS total_amount
-               FROM slips
-               WHERE user_id = %s AND bank_name IS NOT NULL
+                FROM slips
+               WHERE user_id = %s AND bank_name IS NOT NULL AND NOT is_fake AND NOT is_duplicate
                GROUP BY bank_name
                ORDER BY total_amount DESC
                LIMIT 10""",
@@ -425,6 +445,7 @@ def dashboard():
                WHERE user_id = %s
                  AND slip_date >= CURRENT_DATE - INTERVAL '30 days'
                  AND slip_date IS NOT NULL
+                 AND NOT is_fake AND NOT is_duplicate
                GROUP BY slip_date
                ORDER BY slip_date""",
             (user_id,),
@@ -440,6 +461,7 @@ def dashboard():
                FROM slips
                WHERE user_id = %s
                  AND created_at >= NOW() - INTERVAL '8 weeks'
+                 AND NOT is_fake AND NOT is_duplicate
                GROUP BY DATE_TRUNC('week', created_at)
                ORDER BY week_start""",
             (user_id,),
@@ -450,11 +472,12 @@ def dashboard():
         cur.execute(
             """SELECT
                 TO_CHAR(DATE_TRUNC('month', created_at), 'YYYY-MM') AS month,
-                COUNT(*)                                             AS slip_count,
+                COUNT(*)                                            AS slip_count,
                 COALESCE(SUM(amount), 0)                            AS total_amount
                FROM slips
                WHERE user_id = %s
                  AND created_at >= NOW() - INTERVAL '12 months'
+                 AND NOT is_fake AND NOT is_duplicate
                GROUP BY DATE_TRUNC('month', created_at)
                ORDER BY month""",
             (user_id,),
@@ -529,6 +552,77 @@ def _call_ocr(file_path: str) -> tuple[dict | None, list[str]]:
     except Exception as e:
         warnings.append(f"OCR service error: {e}")
         return None, warnings
+
+
+def _call_thunder_verify(file_path: str, ocr_amount: float | None = None, ocr_ref: str | None = None) -> tuple[bool, str | None]:
+    """
+    ตรวจสอบสลิปปลอมด้วย API ของ Thunder Solution (v2) และนำมาเทียบกับ OCR
+    Returns: (is_fake, fake_reason)
+    """
+    # ในตัวอย่างคุณใส่ API Key ตรงๆ แทนการเรียกจากตัวแปร ขออนุญาตใช้ Key นี้ครับ
+    api_key = os.environ.get('THUNDER_API_KEY', '<YOUR_THUNDER_API_KEY>')
+    if not api_key:
+        return False, None
+
+    try:
+        with open(file_path, "rb") as image_file:
+            response = requests.post(
+                'https://api.thunder.in.th/v2/verify/bank',
+                headers={
+                    'Authorization': f'Bearer {api_key}'
+                    # ยกเลิก Content-Type: application/json เพราะ requests จะสร้าง multipart/form-data ให้อัตโนมัติ
+                },
+                data={
+                    'checkDuplicate': 'true'
+                },
+                files={
+                    'image': image_file
+                },
+                timeout=15
+            )
+
+        result = response.json()
+
+        # กรณีตรวจสอบไม่ผ่านจาก Thunder เอง (QR ใช้งานไม่ได้ หรือ API พัง)
+        if not result.get('success'):
+            error_data = result.get('error', {})
+            reason = error_data.get('message') or error_data.get('code') or 'สลิปปลอม/ตรวจสอบไม่ได้'
+            return True, reason
+
+        # ดึง Payload Data จาก Thunder API ที่อ่านจากระบบธนาคารมาเช็ค
+        api_data = result.get('data', {}).get('rawSlip', {})
+        
+        # 1. เทียบยอดเงิน (Amount)
+        if ocr_amount is not None:
+            # ยอดใน API ซ่อนอยู่ใน data.rawSlip.amount.amount
+            api_amount = api_data.get('amount', {}).get('amount')
+            if api_amount is not None:
+                # แปลง float เป็น string เพื่อกันทศนิยมคลาดเคลื่อน หรือเปรียบเทียบตรงๆ
+                if abs(float(api_amount) - float(ocr_amount)) > 0.01:
+                    return True, f"ยอดเงินในภาพ ({ocr_amount}) ไม่ตรงกับข้อมูลจริง ({api_amount})"
+                
+        # 2. เทียบรหัสอ้างอิง (Ref No / TransRef) อย่างน้อยบางส่วน
+        if ocr_ref:
+            # ดึง transRef หรือ ref1 หรือ ref2 มาเทียบ (API บางธนาคารออก transRef บางที่ออก ref1)
+            api_trans_ref = str(api_data.get('transRef') or '').lower()
+            api_ref1 = str(api_data.get('ref1') or '').lower()
+            api_ref2 = str(api_data.get('ref2') or '').lower()
+            
+            ocr_ref_lower = str(ocr_ref).lower()
+            
+            # เช็คว่า ocr_ref เป็นส่วนหนึ่งของ api_ref ต่างๆ หรือไม่ 
+            # (ป้องกันบางที OCR อ่านมาได้แค่ครึ่งเดียว แต่ถ้าตัวอักษรผิดเพี้ยนเลยคือการปลอมแปลง)
+            if not (ocr_ref_lower in api_trans_ref or ocr_ref_lower in api_ref1 or ocr_ref_lower in api_ref2):
+                # ถ้าไม่ตรงเลย
+                return True, f"รหัสอ้างอิงไม่ตรงกับข้อมูลจริง (ภาพ: {ocr_ref})"
+
+        # ถ้าตรวจสอบผ่านทั้งหมด
+        return False, None
+
+    except requests.exceptions.RequestException as e:
+        return False, f"Thunder API connection error: {str(e)}"
+    except Exception as e:
+        return True, str(e)
 
 
 def _check_duplicate(file_hash: str, user_id: int) -> tuple[bool, int | None]:

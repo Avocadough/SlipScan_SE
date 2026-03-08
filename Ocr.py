@@ -136,7 +136,7 @@ class SlipParser:
 
     # Regex patterns
     AMOUNT_REGEX = re.compile(
-        r'(?:จำนวน|amount|total|ยอดโอน)[:\s]*([\d,]+\.?\d{0,2})\s*(?:บาท|baht|thb)?',
+        r'(?:จำนวนเงิน|จํานวนเงิน|จำนวน|จํานวน|amount|total|ยอดโอน)[*:\s]*([\d,]+\.?\d{0,2})\s*\*?\s*(?:บาท|baht|thb)?',
         re.IGNORECASE
     )
     
@@ -149,7 +149,7 @@ class SlipParser:
     )
     
     REF_REGEX = re.compile(
-        r'(?:เลขที่รายการ|ref|อ้างอิง|หมายเลข|reference)[.\s:]*([A-Z0-9]{10,30})',
+        r'(?:รหัส|เลขที่รายการ|ref|อ้างอิง|หมายเลข|reference|เลขที่)[*.\s:]*([A-Z0-9a-z-]{6,40})\*?',
         re.IGNORECASE
     )
     
@@ -289,8 +289,7 @@ class SlipParser:
         
         # ตัวอย่างเบื้องต้น: หาชื่อที่อยู่หลังคำว่า "จาก" หรือ "from" หรือชื่อบุคคลไทย
         patterns = [
-            r'(?:จาก|from)[:\s]+((?:นาย|นาง|นางสาว|Mr\.|Mrs\.|Ms\.)\s+[\u0E00-\u0E7Fa-zA-Z\s]+)',
-            r'(?:ผู้โอน|sender)[:\s]+((?:นาย|นาง|นางสาว|Mr\.|Mrs\.|Ms\.)\s+[\u0E00-\u0E7Fa-zA-Z\s]+)',
+            r'(?:จาก|from|ผู้โอน|sender)[*:\s]+([^\n]+)',
             r'^((?:นาย|นาง|นางสาว)\s+[\u0E00-\u0E7F]+(?:\s+[\u0E00-\u0E7F]+){1,2})',
         ]
         
@@ -311,7 +310,7 @@ class SlipParser:
         text_clean = re.sub(r'<figure>.*?</figure>', '', text, flags=re.DOTALL)
         
         patterns = [
-            r'(?:ถึง|to|ผู้รับ|receiver)[:\s]+([\u0E00-\u0E7Fa-zA-Z\s&\-\.]+)',
+            r'(?:ถึง|to|ผู้รับ|receiver)[*:\s]+([^\n]+)',
             r'(?:บริษัท|ห้าง|ร้าน)\s+([\u0E00-\u0E7Fa-zA-Z\s&\-\.]+)',
             # สำหรับ K+ format: ชื่อร้านอยู่บรรทัดถัดจาก logo/brand
             r'(?:Tops|7-Eleven|Lotus|Big C|Central|Family Mart|Lawson|Makro)\s*(?:daily)?\n?([\u0E00-\u0E7Fa-zA-Z\s&\-\.]+)',
