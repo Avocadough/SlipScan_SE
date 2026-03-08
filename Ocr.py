@@ -273,7 +273,34 @@ class SlipParser:
 
     def _extract_ref_no(self, text: str) -> str | None:
         match = self.REF_REGEX.search(text)
-        return match.group(1) if match else None
+        if match:
+            return self._clean_ref_no(match.group(1))
+        return None
+
+    def _clean_ref_no(self, ref_no: str) -> str:
+        """ทำความสะอาดและแก้ไข Ref No. ที่มักจะอ่านผิดพลาดจาก OCR"""
+        if not ref_no:
+            return ref_no
+            
+        # ลบช่องว่างหรือเครื่องหมายแปลกปลอมที่อาจติดมา
+        cleaned = re.sub(r'[^A-Za-z0-9]', '', ref_no)
+        
+        # 1. แก้ปัญหา 1 เป็น I สำหรับออมสิน (GSB - MyMo)
+        # รหัสอ้างอิง MyMo มักมีความยาว 24 หลัก และมีตัว I แทรกอยู่ตรงกลางเสมอ (ที่เจอคือ 52332202350[91]000025B9790 -> 523322023509I000025B9790)
+        # เราจะใช้ Regex ช่วยกรอง ว่ามันเป็นตัวเลขยาวๆ 12 หลัก แล้วมีตัว 1 ตามด้วยอักขระอื่นๆ ให้ครบ 24
+        # เพื่อหลีกเลี่ยงผลกระทบต่อธนาคารที่ไม่ได้ใช้ format นี้
+        mymo_pattern = re.compile(r'^(\d{12})1([A-Za-z0-9]{11})$')
+        match = mymo_pattern.search(cleaned)
+        if match and len(cleaned) == 24:
+             cleaned = match.group(1) + 'I' + match.group(2)
+
+        # 2. แก้ปัญหาธนาคารกรุงศรี (Krungsri: BAY) (มักมี KS นำหน้า)
+        # ถ้าเริ่มด้วย KS แล้วความยาวขาดไป 1 ตัว (มักจะเป็น 00 หายไป 1 ตัว)
+        # เช่น KS000000328025205 (17 หลัก) -> KS0000000328025205 (18 หลัก)
+        if cleaned.startswith('KS') and len(cleaned) == 17:
+             cleaned = cleaned.replace('KS', 'KS0')
+             
+        return cleaned
 
     def _extract_sender_name(self, text: str) -> str | None:
         # กรอง noise ออก (คำอธิบายรูป, การ์ตูน, etc.)
