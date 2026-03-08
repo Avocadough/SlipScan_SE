@@ -50,9 +50,7 @@ def upload():
     file_hash  = hashlib.sha256(file_bytes).hexdigest()
     file.seek(0)
 
-    # Duplicate check
-    is_dup, dup_slip_id = _check_duplicate(file_hash, user_id)
-
+    # Save file temporarily for OCR
     filename = f"slip_{uuid.uuid4().hex}{Path(file.filename).suffix.lower()}"
     dest     = UPLOAD_DIR / filename
     with open(str(dest), "wb") as f:
@@ -62,6 +60,12 @@ def upload():
     if ocr_data is None:
         warnings.append("OCR service unavailable or failed")
         ocr_data = {}
+
+    is_dup, dup_slip_id = _check_duplicate(
+        file_hash, user_id, 
+        ref_no=ocr_data.get('ref_no'), 
+        bank_name=ocr_data.get('bank_name')
+    )
 
     # ตรวจสอบสลิปปลอมผ่าน Thunder Solution (เทียบกับข้อมูล OCR)
     is_fake, fake_reason = _call_thunder_verify(
@@ -138,8 +142,6 @@ def upload_batch():
         file_hash  = hashlib.sha256(file_bytes).hexdigest()
         file.seek(0)
 
-        is_dup, dup_slip_id = _check_duplicate(file_hash, user_id)
-
         filename = f"slip_{uuid.uuid4().hex}{Path(file.filename).suffix.lower()}"
         dest     = UPLOAD_DIR / filename
         with open(str(dest), "wb") as f:
@@ -149,6 +151,12 @@ def upload_batch():
         if ocr_data is None:
             warnings.append("OCR service unavailable")
             ocr_data = {}
+
+        is_dup, dup_slip_id = _check_duplicate(
+            file_hash, user_id, 
+            ref_no=ocr_data.get('ref_no'), 
+            bank_name=ocr_data.get('bank_name')
+        )
 
         # ตรวจสอบสลิปปลอมผ่าน Thunder Solution (เทียบกับข้อมูล OCR)
         is_fake_slip, fake_reason = _call_thunder_verify(
@@ -625,11 +633,12 @@ def _call_thunder_verify(file_path: str, ocr_amount: float | None = None, ocr_re
         return True, str(e)
 
 
-def _check_duplicate(file_hash: str, user_id: int) -> tuple[bool, int | None]:
+def _check_duplicate(file_hash: str, user_id: int, ref_no: str = None, bank_name: str = None) -> tuple[bool, int | None]:
     """Return (is_duplicate, original_slip_id)."""
     conn = get_db()
     try:
         with conn.cursor() as cur:
+            # Check by hash first
             cur.execute(
                 """SELECT sh.slip_id FROM slip_hashes sh
                    JOIN slips s ON s.id = sh.slip_id
@@ -640,6 +649,19 @@ def _check_duplicate(file_hash: str, user_id: int) -> tuple[bool, int | None]:
             row = cur.fetchone()
             if row:
                 return True, row["slip_id"]
+            
+            # Check by ref_no and bank_name
+            if ref_no and bank_name:
+                cur.execute(
+                    """SELECT id FROM slips
+                       WHERE ref_no = %s AND bank_name = %s AND user_id = %s
+                       LIMIT 1""",
+                    (ref_no, bank_name, user_id),
+                )
+                row2 = cur.fetchone()
+                if row2:
+                    return True, row2["id"]
+                    
     except Exception:
         pass
     return False, None
