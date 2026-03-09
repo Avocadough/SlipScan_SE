@@ -567,10 +567,10 @@ def _call_thunder_verify(file_path: str, ocr_amount: float | None = None, ocr_re
     ตรวจสอบสลิปปลอมด้วย API ของ Thunder Solution (v2) และนำมาเทียบกับ OCR
     Returns: (is_fake, fake_reason)
     """
-    # ในตัวอย่างคุณใส่ API Key ตรงๆ แทนการเรียกจากตัวแปร ขออนุญาตใช้ Key นี้ครับ
-    api_key = os.environ.get('THUNDER_API_KEY', '<YOUR_THUNDER_API_KEY>')
+    # ดึงค่า API Key จากอเมริกา (.env) ห้ามใส่ Key ตรงๆ เด็ดขาด!
+    api_key = os.environ.get('THUNDER_API_KEY')
     if not api_key:
-        return False, None
+        return False, "Server configuration error: THUNDER_API_KEY is not set."
 
     try:
         with open(file_path, "rb") as image_file:
