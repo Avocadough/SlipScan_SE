@@ -54,6 +54,7 @@ SlipScan_SE/
 
 - Python 3.10+
 - [Typhoon OCR API Key](https://opentyphoon.ai)
+- [Thunder Solution API Key](https://api.thunder.in.th/) สำหรับตรวจสอบสลิปปลอม
 - [Supabase](https://supabase.com) account (free tier ได้)
 
 ---
@@ -117,7 +118,10 @@ JWT_EXPIRE=86400
 BACKEND_PORT=8000
 APP_DEBUG=false
 OCR_SERVICE_URL=http://localhost:5000/ocr
+THUNDER_API_KEY=ใส่_KEY_ของ_THUNDER_SOLUTION_ที่นี่
 ```
+
+> ⚠️ **ข้อควรระวังอย่างยิ่ง:** ห้ามนำ API Key ของจริง (ทั้งเบอร์, token, หรือคีย์ต่างๆ) มาวางลงในโค้ดหรือไฟล์ที่ถูกอัพขึ้น Git เด็ดขาด! ให้ใส่ผ่านไฟล์ `.env` ที่ไม่อยู่ใน Git เท่านั้น
 
 #### `ocr_service/.env`
 
@@ -131,9 +135,13 @@ cp ocr_service/.env.example ocr_service/.env
 TYPHOON_OCR_API_KEY=sk-xxxxxxxxxxxxxxxxxxxx
 OCR_SERVICE_PORT=5000
 OCR_MAX_FILE_SIZE_MB=10
+THUNDER_API_KEY=ใส่_KEY_ของ_THUNDER_SOLUTION_ที่นี่
 ```
 
-> ขอ API Key ได้ที่ [opentyphoon.ai](https://opentyphoon.ai)
+> ขอ API Key สำหรับ OCR ได้ที่ [opentyphoon.ai](https://opentyphoon.ai)
+> ขอ API Key สำหรับตรวจสอบสลิปได้ที่ [Thunder Solution](https://api.thunder.in.th/)
+>
+> ⚠️ **ข้อควรระวังอย่างยิ่ง:** ห้ามนำภาพ API Key หรือข้อความ API Key ของจริงมาแนบหรือระบุลงใน Source Code คอลัมน์ที่ถูก Commit เด็ดขาด
 
 ---
 
