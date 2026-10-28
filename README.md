@@ -1,6 +1,14 @@
-# SlipScan — ระบบตรวจสอบสลิปโอนเงินด้วย AI
+# SlipScan — ระบบอ่านข้อมูลสลิปด้วย OCR
 
 ระบบ OCR อ่านสลิปธนาคารไทย พร้อม Authentication และ API สำหรับบันทึกข้อมูล
+
+## ภาพรวมและขอบเขต
+
+SlipScan เป็นโปรเจกต์ต้นแบบที่รับภาพสลิป ส่งภาพไปยังบริการ OCR แยกข้อมูลจากข้อความ และบันทึกผลผ่าน Flask API โดยมีหน้าเว็บสำหรับเข้าสู่ระบบและอัปโหลดภาพ
+
+- การอ่านข้อมูลจากภาพและการตรวจภาพซ้ำด้วย hash **ไม่ได้ยืนยัน** ว่าสลิปหรือการโอนเงินเป็นของจริง
+- การใช้งานเต็มรูปแบบต้องตั้งค่า PostgreSQL/Supabase และ Typhoon OCR API ด้วยตนเอง การใช้บริการภายนอกอาจมีค่าใช้จ่าย
+- การทดสอบบริการ การเชื่อมต่อฐานข้อมูล และ OCR จริงไม่ได้รันระหว่างการปรับ README ครั้งนี้
 
 ---
 
@@ -193,6 +201,8 @@ venv\Scripts\python.exe backend_flask\app.py
 | `POST` | `/api/slips/upload-batch` | อัปโหลดสลิปหลายใบ | ✅ JWT |
 | `GET`  | `/api/slips` | ดูรายการสลิปทั้งหมด | ✅ JWT |
 | `GET`  | `/api/slips/<id>` | ดูสลิปตาม ID | ✅ JWT |
+| `GET`  | `/api/slips/export` | ส่งออกรายการเป็น CSV | ✅ JWT |
+| `GET`  | `/api/slips/dashboard` | อ่านสถิติสำหรับ dashboard | ✅ JWT |
 
 ---
 
@@ -218,7 +228,7 @@ venv\Scripts\python.exe backend_flask\app.py
 
 ## 📝 Changelog
 
-### Day 6 (Sprint 1) — วันนี้
+### Day 6 (Sprint 1)
 - 🔄 **เปลี่ยน Backend** จาก PHP → **Python Flask**
 - 🔄 **เปลี่ยน Database** จาก MySQL (local) → **Supabase PostgreSQL** (cloud)
 - ✅ สร้าง `backend_flask/` พร้อม routes, config, auth, seed
