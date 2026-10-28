@@ -1,6 +1,14 @@
-# SlipScan — ระบบอ่านข้อมูลสลิปด้วย OCR
-
-ระบบ OCR อ่านสลิปธนาคารไทย พร้อม Authentication และ API สำหรับบันทึกข้อมูล
+<div align="center">
+  <h1>SlipScan</h1>
+  <p>ต้นแบบอ่านข้อมูลสลิปธนาคารไทยด้วย OCR</p>
+  <p>
+    <img alt="Backend: Flask" src="https://img.shields.io/badge/Backend-Flask-39765f">
+    <img alt="OCR: Typhoon" src="https://img.shields.io/badge/OCR-Typhoon-5b678f">
+  </p>
+  <p>
+    <a href="backend_flask/">Backend</a> &nbsp;·&nbsp; <a href="ocr_service/">OCR service</a> &nbsp;·&nbsp; <a href="frontend/">Frontend</a>
+  </p>
+</div>
 
 ## ภาพรวมและขอบเขต
 
