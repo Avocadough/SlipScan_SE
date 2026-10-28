@@ -59,7 +59,7 @@ SlipScan_SE/
 │   └── upload.html
 ├── Ocr.py                    ← OCR core engine
 ├── start.bat                 ← รัน services ทั้งหมดในครั้งเดียว (Windows)
-└── venv/                     ← Python virtual environment
+└── venv/                     ← Python virtual environment ในเครื่อง (ไม่ถูก commit)
 ```
 
 ---
@@ -77,7 +77,7 @@ SlipScan_SE/
 ### 2. Clone & Virtual Environment
 
 ```bash
-git clone <repo-url>
+git clone https://github.com/Avocadough/SlipScan_SE.git
 cd SlipScan_SE
 
 # สร้าง virtual environment
